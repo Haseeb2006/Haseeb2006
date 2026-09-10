@@ -63,6 +63,17 @@ async def open_app(name: str) -> dict[str, Any]:
     return await apps.open_app(name=name)
 
 
+@server.tool(annotations={"readOnlyHint": False, "destructiveHint": False})
+@guarded(Tier.AMBER)
+async def set_volume(level: int) -> dict[str, Any]:
+    """Set the output volume to a percentage from 0 to 100.
+
+    Args:
+        level: Volume percentage. 0 mutes.
+    """
+    return await system.set_volume(level=level)
+
+
 @server.tool(annotations={"readOnlyHint": False, "destructiveHint": True})
 @guarded(Tier.RED)
 async def run_shortcut(

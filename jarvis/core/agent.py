@@ -8,20 +8,13 @@ can do.
 
 from __future__ import annotations
 
-import os
-import sys
-from contextlib import AsyncExitStack
 from datetime import datetime
 from pathlib import Path
-from typing import Any, Awaitable, Callable
+from typing import Any, Callable
 
 import anthropic
-from anthropic.lib.tools.mcp import async_mcp_tool
-from mcp import ClientSession, StdioServerParameters
-from mcp.client.stdio import stdio_client
 
 from . import settings
-from .confirm import ask_terminal
 
 PROMPTS = Path(__file__).resolve().parent / "prompts"
 CACHE: dict[str, str] = {"type": "ephemeral"}
@@ -61,52 +54,24 @@ def _text_of(message: Any) -> str:
 
 
 class Jarvis:
-    """One conversation, holding one MCP server subprocess open for its lifetime."""
+    """One Claude conversation over a Machine's tools."""
 
     def __init__(
         self,
+        machine: Any,
         *,
         on_tool: ToolReporter | None = None,
-        elicitation_callback: Callable[..., Awaitable[Any]] | None = None,
         client: Any | None = None,
     ) -> None:
+        self._machine = machine
         self._on_tool = on_tool
-        self._elicit = elicitation_callback or ask_terminal
         self._client = client or anthropic.AsyncAnthropic()
-        self._stack = AsyncExitStack()
-        self._tools: list[Any] = []
         self.messages: list[dict[str, Any]] = []
-        self.tool_names: list[str] = []
         self._fallbacks_supported = True
 
-    async def __aenter__(self) -> "Jarvis":
-        params = StdioServerParameters(
-            command=sys.executable,
-            args=["-m", "mcp_server.server"],
-            env=dict(os.environ),
-        )
-        read, write = await self._stack.enter_async_context(stdio_client(params))
-        session = await self._stack.enter_async_context(
-            ClientSession(read, write, elicitation_callback=self._elicit)
-        )
-        await session.initialize()
-
-        discovered = (await session.list_tools()).tools
-        self.tool_names = [tool.name for tool in discovered]
-        # Mark only the final tool: cache_control ends a prefix, and the whole
-        # tool block is that prefix. Marking every tool wastes breakpoints.
-        self._tools = [
-            async_mcp_tool(
-                tool,
-                session,
-                cache_control=CACHE if index == len(discovered) - 1 else None,
-            )
-            for index, tool in enumerate(discovered)
-        ]
-        return self
-
-    async def __aexit__(self, *exc: Any) -> None:
-        await self._stack.aclose()
+    @property
+    def tool_names(self) -> list[str]:
+        return self._machine.tool_names
 
     def _request(self) -> dict[str, Any]:
         request: dict[str, Any] = {
@@ -114,7 +79,7 @@ class Jarvis:
             "max_tokens": settings.MAX_TOKENS,
             "max_iterations": settings.MAX_ITERATIONS,
             "system": build_system(),
-            "tools": self._tools,
+            "tools": self._machine.claude_tools,
             # Adaptive thinking, with effort as the cost dial. `budget_tokens` is
             # rejected outright on this model family.
             "thinking": {"type": "adaptive"},

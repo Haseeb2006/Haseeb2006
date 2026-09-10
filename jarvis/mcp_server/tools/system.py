@@ -141,6 +141,29 @@ async def _uptime() -> str | None:
     return text.split(",")[0].strip() if text else None
 
 
+async def set_volume(level: int) -> dict[str, Any]:
+    """Set the Mac's output volume to a percentage from 0 to 100.
+
+    Args:
+        level: Volume percentage. 0 mutes.
+    """
+    macos.require_macos("set_volume")
+    try:
+        level = int(level)
+    except (TypeError, ValueError):
+        raise ValueError(f"level must be a whole number, got {level!r}") from None
+    if not 0 <= level <= 100:
+        raise ValueError(f"level must be between 0 and 100, got {level}")
+
+    # This is the one place a value reaches an interpreter. `level` is an int in
+    # a known range by the time it gets here, so there is no string to inject.
+    previous = await macos.probe(_volume())
+    result = await macos.osascript(f"set volume output volume {level}")
+    if not result.ok:
+        raise RuntimeError(result.stderr.strip() or "could not set the volume")
+    return {"volume_percent": level, "previous_percent": previous}
+
+
 async def system_status() -> dict[str, Any]:
     """Report the machine's current state.
 

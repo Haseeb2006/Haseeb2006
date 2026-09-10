@@ -8,6 +8,12 @@ import pytest
 
 from core import settings
 from core.agent import Jarvis, build_system, volatile_context
+from core.machine import Machine
+
+
+class FakeMachine:
+    claude_tools: list = []
+    tool_names: list = []
 
 
 class Block:
@@ -88,7 +94,7 @@ def test_system_prompt_holds_nothing_that_changes():
 
 async def test_the_clock_travels_with_the_user_turn(monkeypatch):
     client = FakeClient([FakeRunner([Message([Block("text", text="hi")])])])
-    jarvis = Jarvis(client=client)
+    jarvis = Jarvis(FakeMachine(), client=client)
     await jarvis.ask("hello")
 
     first_user = jarvis.messages[0]
@@ -102,7 +108,7 @@ async def test_the_clock_travels_with_the_user_turn(monkeypatch):
 
 async def test_reply_is_the_final_text():
     client = FakeClient([FakeRunner([Message([Block("text", text="Battery 100%.")])])])
-    assert await Jarvis(client=client).ask("battery?") == "Battery 100%."
+    assert await Jarvis(FakeMachine(), client=client).ask("battery?") == "Battery 100%."
 
 
 async def test_history_carries_across_turns():
@@ -112,7 +118,7 @@ async def test_history_carries_across_turns():
             FakeRunner([Message([Block("text", text="two")])]),
         ]
     )
-    jarvis = Jarvis(client=client)
+    jarvis = Jarvis(FakeMachine(), client=client)
     await jarvis.ask("first")
     await jarvis.ask("second")
 
@@ -128,7 +134,7 @@ async def test_tool_results_are_mirrored_into_history():
     result = {"role": "user", "content": [{"type": "tool_result", "content": "ok"}]}
     client = FakeClient([FakeRunner([tool_turn, final], tool_result=result)])
 
-    jarvis = Jarvis(client=client)
+    jarvis = Jarvis(FakeMachine(), client=client)
     await jarvis.ask("battery?")
     assert result in jarvis.messages
 
@@ -138,7 +144,7 @@ async def test_tool_calls_are_reported_as_they_happen():
     tool_turn = Message([Block("tool_use", name="open_app", input={"name": "Music"})])
     client = FakeClient([FakeRunner([tool_turn, Message([Block("text", text="done")])])])
 
-    await Jarvis(client=client, on_tool=lambda n, a: seen.append((n, a))).ask("music")
+    await Jarvis(FakeMachine(), client=client, on_tool=lambda n, a: seen.append((n, a))).ask("music")
     assert seen == [("open_app", {"name": "Music"})]
 
 
@@ -146,7 +152,7 @@ async def test_refusal_is_reported_plainly():
     client = FakeClient(
         [FakeRunner([Message([Block("text", text="")], stop_reason="refusal")])]
     )
-    assert "can't help" in await Jarvis(client=client).ask("something")
+    assert "can't help" in await Jarvis(FakeMachine(), client=client).ask("something")
 
 
 # --- request shape ---
@@ -154,7 +160,7 @@ async def test_refusal_is_reported_plainly():
 
 async def test_request_uses_adaptive_thinking_and_effort():
     client = FakeClient([FakeRunner([Message([Block("text", text="ok")])])])
-    await Jarvis(client=client).ask("hi")
+    await Jarvis(FakeMachine(), client=client).ask("hi")
     call = client.beta.messages.calls[0]
 
     assert call["thinking"] == {"type": "adaptive"}
@@ -172,7 +178,7 @@ async def test_fallback_is_dropped_and_retried_when_the_account_lacks_it():
         [FakeRunner([Message([Block("text", text="recovered")])])],
         fail_with=_bad_request("fallbacks: beta not enabled for this organization"),
     )
-    jarvis = Jarvis(client=client)
+    jarvis = Jarvis(FakeMachine(), client=client)
     assert await jarvis.ask("hi") == "recovered"
     # Second attempt carried neither the beta flag nor the parameter.
     retry = client.beta.messages.calls[1]
@@ -182,7 +188,7 @@ async def test_fallback_is_dropped_and_retried_when_the_account_lacks_it():
 async def test_an_unrelated_bad_request_is_not_swallowed():
     client = FakeClient([], fail_with=_bad_request("max_tokens is too large"))
     with pytest.raises(anthropic.BadRequestError):
-        await Jarvis(client=client).ask("hi")
+        await Jarvis(FakeMachine(), client=client).ask("hi")
 
 
 async def test_a_failed_turn_leaves_no_dangling_tool_use():
@@ -192,7 +198,7 @@ async def test_a_failed_turn_leaves_no_dangling_tool_use():
         [FakeRunner([Message([Block("text", text="fine")])])],
         fail_with=RuntimeError("connection dropped mid-turn"),
     )
-    jarvis = Jarvis(client=client)
+    jarvis = Jarvis(FakeMachine(), client=client)
     jarvis.messages.append({"role": "user", "content": "earlier"})
     jarvis.messages.append({"role": "assistant", "content": [tool_turn]})
     before = list(jarvis.messages)
@@ -206,21 +212,23 @@ async def test_a_failed_turn_leaves_no_dangling_tool_use():
 # --- connecting to the real server ---
 
 
-async def test_jarvis_discovers_the_servers_tools(sandbox):
+async def test_machine_discovers_the_servers_tools(sandbox):
     """Integration: launches the actual MCP server and converts what it exposes."""
     client = FakeClient([FakeRunner([Message([Block("text", text="ok")])])])
-    async with Jarvis(client=client) as jarvis:
+    async with Machine() as machine:
+        jarvis = Jarvis(machine, client=client)
         assert set(jarvis.tool_names) == {
             "system_status",
             "search_files",
             "list_shortcuts",
             "open_app",
+            "set_volume",
             "run_shortcut",
         }
         await jarvis.ask("hi")
         sent = client.beta.messages.calls[0]["tools"]
-        assert len(sent) == 5
+        assert len(sent) == 6
         # One breakpoint, on the last tool: it ends the whole tool prefix.
         marked = [t for t in sent if t.to_dict().get("cache_control")]
         assert len(marked) == 1
-        assert marked[0].to_dict()["name"] == jarvis.tool_names[-1]
+        assert marked[0].to_dict()["name"] == machine.tool_names[-1]

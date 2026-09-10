@@ -18,6 +18,7 @@ async def test_all_tools_are_registered():
         "search_files",
         "list_shortcuts",
         "open_app",
+        "set_volume",
         "run_shortcut",
     }
 

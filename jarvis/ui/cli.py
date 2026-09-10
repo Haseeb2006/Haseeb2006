@@ -12,6 +12,10 @@ import anthropic
 
 from core import settings
 from core.agent import Jarvis
+from core.dispatch import Dispatcher
+from core.local import LocalModel
+from core.machine import Machine
+from core.router import Tier
 
 DIM, YELLOW, BOLD, OFF = "\033[2m", "\033[33m", "\033[1m", "\033[0m"
 BANNER = f"{BOLD}jarvis{OFF} {DIM}— ctrl-d or /quit to exit, /help for commands{OFF}"
@@ -24,8 +28,11 @@ def show_tool(name: str, arguments: dict) -> None:
 
 
 HELP = """  /tools    list the tools Jarvis can use
+  /tiers    show which tiers are available
   /reset    forget this conversation
   /quit     exit"""
+
+TIER_MARK = {Tier.DIRECT: "direct", Tier.LOCAL: "local", Tier.CLAUDE: "claude"}
 
 # People type `quit`, not `/quit`. Sending that to the API costs a request and
 # returns a puzzled answer, so treat the bare words as the command too.
@@ -64,17 +71,35 @@ def fatal_hint(exc: anthropic.APIStatusError, message: str) -> str | None:
     return None
 
 
-async def converse() -> int:
-    if not settings.has_api_key():
-        print("ANTHROPIC_API_KEY is not set.\n")
-        print("  export ANTHROPIC_API_KEY=sk-ant-...")
-        print("\nPut it in your shell profile so it survives new terminals.")
-        return 1
+async def build_status() -> tuple[LocalModel | None, str]:
+    """Which free tier is usable, and why not when it is not."""
+    local = LocalModel()
+    usable, reason = await local.status()
+    if usable:
+        return local, f"local {local.model}"
+    return None, f"{DIM}local off ({reason}){OFF}"
 
+
+async def converse() -> int:
     print(BANNER)
-    async with Jarvis(on_tool=show_tool) as jarvis:
-        print(f"{DIM}{len(jarvis.tool_names)} tools · {settings.MODEL} "
-              f"· effort {settings.EFFORT}{OFF}\n")
+
+    local, local_note = await build_status()
+    has_key = settings.has_api_key()
+
+    async with Machine() as machine:
+        jarvis = Jarvis(machine, on_tool=show_tool) if has_key else None
+        dispatcher = Dispatcher(machine, local=local, claude=jarvis)
+
+        tiers = ["direct rules", local_note if local else local_note]
+        tiers.append(
+            f"{settings.MODEL} (effort {settings.EFFORT})" if has_key
+            else f"{DIM}claude off (no ANTHROPIC_API_KEY){OFF}"
+        )
+        print(f"{DIM}{len(machine.tool_names)} tools{OFF} · " + f"{DIM} · {OFF}".join(tiers))
+        if not has_key and not local:
+            print(f"{YELLOW}Only direct commands will work — try 'battery' or "
+                  f"'volume 40'.{OFF}")
+        print()
 
         while True:
             try:
@@ -91,15 +116,19 @@ async def converse() -> int:
                 print(HELP)
                 continue
             if text == "/tools":
-                print("\n".join(f"  {name}" for name in jarvis.tool_names))
+                print("\n".join(f"  {name}" for name in machine.tool_names))
+                continue
+            if text == "/tiers":
+                print("\n".join(f"  {tier}" for tier in tiers))
                 continue
             if text == "/reset":
-                jarvis.messages.clear()
+                if jarvis:
+                    jarvis.messages.clear()
                 print(f"{DIM}  conversation cleared{OFF}")
                 continue
 
             try:
-                reply = await jarvis.ask(text)
+                reply = await dispatcher.handle(text)
             except anthropic.RateLimitError:
                 print(f"{YELLOW}  rate limited — wait a moment and try again{OFF}")
                 continue
@@ -118,7 +147,8 @@ async def converse() -> int:
                 print(f"\n{DIM}  interrupted{OFF}")
                 continue
 
-            print(f"\n{reply}\n")
+            mark = reply.label or TIER_MARK[reply.tier]
+            print(f"\n{reply.text}\n{DIM}  [{mark}]{OFF}\n")
 
 
 def main() -> None:

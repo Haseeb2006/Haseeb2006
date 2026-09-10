@@ -19,6 +19,35 @@ uv run mcp dev mcp_server/server.py     # MCP Inspector (needs node)
 uv run jarvis-mcp                       # raw stdio server
 ```
 
+## Tiers
+
+Every message goes to the cheapest tier that can actually handle it:
+
+| Tier | Handles | Cost |
+|---|---|---|
+| **0 — rules** | `volume 40`, `battery`, `open Music`, `find resume` | free, instant |
+| **1 — Ollama** | general questions, small talk | free, local |
+| **2 — Claude** | anything multi-step, ambiguous, or reasoned | paid |
+
+Escalation is one-way; each reply is tagged with the tier that produced it.
+
+**It runs with no API key at all.** Tiers 0 and 1 need nothing but your Mac:
+
+```bash
+brew install ollama && ollama serve
+ollama pull qwen3:4b
+uv run jarvis           # no ANTHROPIC_API_KEY needed
+```
+
+Two rules keep the cheap tiers honest. A tier-0 pattern must match the *whole*
+message, so "open Music" acts but "should I open Music?" does not — and if the
+call fails anyway ("open the pod bay doors"), the message escalates instead of
+returning a confusing error. And anything mentioning this Mac skips the local
+model entirely: a model with no tools would answer from imagination.
+
+RED tools are unreachable from tier 0 by construction. Running a Shortcut always
+goes through a model and a confirmation.
+
 ## The assistant
 
 `uv run jarvis` is the same five tools, driven by Claude in your terminal instead
@@ -40,6 +69,8 @@ and this client asks you. Only an explicit `y` runs one.
 | `JARVIS_MODEL` | `claude-opus-5` | |
 | `JARVIS_EFFORT` | `low` | cost/quality dial: `low` for chat, `high` for planning |
 | `JARVIS_MAX_ITERATIONS` | `12` | ceiling on tool calls in one turn |
+| `JARVIS_LOCAL_MODEL` | `qwen3:4b` | the Ollama model for tier 1 |
+| `OLLAMA_HOST` | `http://localhost:11434` | |
 
 ## Wire into Claude Desktop
 
@@ -63,6 +94,7 @@ cannot reach a server on your machine.
 | Tool | Tier | Does |
 |---|---|---|
 | `system_status` | GREEN | battery, wifi, volume, disk, uptime, frontmost app |
+| `set_volume` | AMBER | set output volume 0-100 |
 | `search_files` | GREEN | Spotlight search, confined to allowlisted roots |
 | `open_app` | AMBER | launch a Mac application by name |
 | `list_shortcuts` | GREEN | names of your Shortcuts |
