@@ -80,15 +80,24 @@ jarvis-ask volume 40
 `jarvis-prompt` opens a native input box, asks, and shows the answer — no extra
 software. Bind it to ⌥Space either way:
 
-**Shortcuts app** (nothing to install): New Shortcut → *Run Shell Script* with
+**Shortcuts app** — nothing to install, and the recommended route:
 
+1. Shortcuts → **+** → search for **Run Shell Script**, add it.
+2. Shell: `/bin/zsh`, Pass input: **to stdin**, and as the script:
+   `<your uv path> --directory <this folder> run jarvis-prompt`
+   (`which uv` gives the first path; use absolute paths — a Shortcut does not
+   get your shell's PATH, the same reason the launchd agent needs ~/.jarvis/env.)
+3. Name it **Jarvis**, then in the sidebar ⓘ → **Add Keyboard Shortcut** → ⌥Space.
+
+**skhd** is the alternative, but it is not in homebrew-core and needs
+Accessibility permission and a background service of its own:
+
+```bash
+brew tap koekeishiya/formulae && brew install skhd
+skhd --start-service
 ```
-<your uv path> --directory <this folder> run jarvis-prompt
-```
 
-then in the Shortcut's details assign ⌥Space. `which uv` gives the first path.
-
-**skhd** (`brew install skhd`), in `~/.skhdrc`:
+then in `~/.skhdrc`:
 
 ```
 alt - space : <your uv path> --directory <this folder> run jarvis-prompt
