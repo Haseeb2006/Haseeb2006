@@ -48,6 +48,61 @@ model entirely: a model with no tools would answer from imagination.
 RED tools are unreachable from tier 0 by construction. Running a Shortcut always
 goes through a model and a confirmation.
 
+## Always on
+
+A resident daemon holds the MCP connection, the local model and the conversation
+open, so a keystroke gets an answer instead of paying for a cold start each time.
+
+```bash
+uv run python install_agent.py     # launchd keeps it running, and restarts it
+uv run python install_agent.py --status
+uv run python install_agent.py --uninstall
+```
+
+**launchd gives a daemon none of your shell environment**, so nothing exported in
+`.zshrc` reaches it. Settings go in `~/.jarvis/env` (written for you on install,
+mode 0600 since it holds a key):
+
+```
+ANTHROPIC_API_KEY=sk-ant-...
+JARVIS_ALLOWED_ROOTS=/Users/YOU/Documents,/Users/YOU/Desktop
+```
+
+Then from anywhere:
+
+```bash
+jarvis-ask battery          # ~100ms, most of it Python starting up
+jarvis-ask volume 40
+```
+
+### A key that summons it
+
+`jarvis-prompt` opens a native input box, asks, and shows the answer — no extra
+software. Bind it to ⌥Space either way:
+
+**Shortcuts app** (nothing to install): New Shortcut → *Run Shell Script* with
+
+```
+<your uv path> --directory <this folder> run jarvis-prompt
+```
+
+then in the Shortcut's details assign ⌥Space. `which uv` gives the first path.
+
+**skhd** (`brew install skhd`), in `~/.skhdrc`:
+
+```
+alt - space : <your uv path> --directory <this folder> run jarvis-prompt
+```
+
+The daemon talks over a Unix socket at `~/.jarvis/jarvis.sock`, mode 0600 — not a
+TCP port. This process reads files, controls apps and spends money, so
+filesystem permissions are the access control and nothing is reachable from the
+network. Requests are handled one at a time: there is one machine and one
+conversation, and two prompts racing to set the volume is not a feature.
+
+A conversation idle for 30 minutes starts fresh, so yesterday's topic does not
+colour today's answer. `JARVIS_IDLE_RESET` changes that.
+
 ## Memory
 
 It remembers across sessions, in `~/.jarvis/memory.db` (owner-readable only).

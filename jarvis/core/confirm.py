@@ -48,6 +48,52 @@ async def ask_terminal(context: Any, params: Any) -> types.ElicitResult | types.
     return types.ElicitResult(action="accept", content=content)
 
 
+async def _dialog(message: str, title: str = "Jarvis") -> bool:
+    """A native yes/no dialog. Returns True only on an explicit Allow."""
+    # The message is passed as an argument, never interpolated into the script.
+    process = await asyncio.create_subprocess_exec(
+        "osascript",
+        "-e", "on run argv",
+        "-e", "activate",
+        "-e", 'display dialog (item 1 of argv) with title (item 2 of argv) '
+              'buttons {"Deny", "Allow"} default button "Deny" with icon caution',
+        "-e", "end run",
+        message, title,
+        stdout=asyncio.subprocess.PIPE,
+        stderr=asyncio.subprocess.PIPE,
+    )
+    try:
+        out, _ = await asyncio.wait_for(process.communicate(), timeout=120)
+    except asyncio.TimeoutError:
+        process.kill()
+        await process.wait()
+        return False
+    # Dismissing the dialog exits non-zero, which is a refusal like any other.
+    return process.returncode == 0 and "Allow" in out.decode("utf-8", "replace")
+
+
+async def ask_dialog(context: Any, params: Any) -> types.ElicitResult | types.ErrorData:
+    """Confirm a RED action with a macOS dialog, for the daemon, which has no stdin."""
+    if getattr(params, "mode", "form") == "url" or hasattr(params, "url"):
+        return types.ErrorData(
+            code=types.INVALID_REQUEST,
+            message="This client only supports form-mode confirmation.",
+        )
+
+    try:
+        allowed = await _dialog(_describe(params))
+    except (OSError, FileNotFoundError):
+        return types.ElicitResult(action="decline")  # no way to ask, no consent
+
+    if not allowed:
+        return types.ElicitResult(action="decline")
+
+    schema = getattr(params, "requestedSchema", None) or {}
+    properties = schema.get("properties", {}) if isinstance(schema, dict) else {}
+    content: dict[str, Any] = {name: True for name in properties} or {"confirm": True}
+    return types.ElicitResult(action="accept", content=content)
+
+
 async def deny_all(context: Any, params: Any) -> types.ElicitResult:
     """Non-interactive stand-in: refuse everything rather than auto-approving."""
     return types.ElicitResult(action="decline")

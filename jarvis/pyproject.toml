@@ -12,6 +12,9 @@ dependencies = [
 [project.scripts]
 jarvis-mcp = "mcp_server.server:main"
 jarvis = "ui.cli:main"
+jarvisd = "core.daemon:main"
+jarvis-ask = "ui.ask:main"
+jarvis-prompt = "ui.ask:prompt"
 
 [dependency-groups]
 dev = [
