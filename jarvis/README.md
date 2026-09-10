@@ -14,9 +14,32 @@ uv sync
 ## Run
 
 ```bash
+uv run jarvis                           # the assistant (needs ANTHROPIC_API_KEY)
 uv run mcp dev mcp_server/server.py     # MCP Inspector (needs node)
 uv run jarvis-mcp                       # raw stdio server
 ```
+
+## The assistant
+
+`uv run jarvis` is the same five tools, driven by Claude in your terminal instead
+of Claude Desktop. It launches the MCP server itself — nothing to configure.
+
+```bash
+export ANTHROPIC_API_KEY=sk-ant-...
+uv run jarvis
+```
+
+Commands: `/tools`, `/reset`, `/quit`. Each tool call prints as it runs, so the
+machine is never a black box.
+
+RED actions prompt right in the terminal — the server asks the client to confirm,
+and this client asks you. Only an explicit `y` runs one.
+
+| Env var | Default | |
+|---|---|---|
+| `JARVIS_MODEL` | `claude-opus-5` | |
+| `JARVIS_EFFORT` | `low` | cost/quality dial: `low` for chat, `high` for planning |
+| `JARVIS_MAX_ITERATIONS` | `12` | ceiling on tool calls in one turn |
 
 ## Wire into Claude Desktop
 

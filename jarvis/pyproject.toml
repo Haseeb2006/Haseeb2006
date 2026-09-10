@@ -5,11 +5,13 @@ description = "A macOS MCP server: the hands of a personal assistant."
 readme = "README.md"
 requires-python = ">=3.11"
 dependencies = [
+    "anthropic[mcp]>=0.116",
     "mcp[cli]>=2.0",
 ]
 
 [project.scripts]
 jarvis-mcp = "mcp_server.server:main"
+jarvis = "ui.cli:main"
 
 [dependency-groups]
 dev = [
@@ -22,7 +24,7 @@ requires = ["hatchling"]
 build-backend = "hatchling.build"
 
 [tool.hatch.build.targets.wheel]
-packages = ["mcp_server"]
+packages = ["mcp_server", "core", "ui"]
 
 [tool.pytest.ini_options]
 asyncio_mode = "auto"
