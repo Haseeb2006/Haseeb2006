@@ -25,6 +25,7 @@ MACHINE_WORDS = (
     "quit", "whatsapp", "safari", "chrome", "terminal", "running",
     "clipboard", "playing", "track", "song", "play", "pause", "lock",
     "louder", "quieter", "dark mode", "light mode", "brightness",
+    "remember", "forget", "memory", "memories", "recall",
 )
 
 
@@ -95,6 +96,28 @@ def _summarise(tool: str, arguments: dict[str, Any], result: Any) -> str:
         text = result.get("text", "")
         preview = text if len(text) <= 400 else text[:400] + f"… ({len(text)} chars)"
         return f"Clipboard:\n{preview}"
+
+    if tool == "remember":
+        if result.get("already_known"):
+            return "Already knew that."
+        return f"Remembered: {result.get('text')}"
+
+    if tool == "recall":
+        memories = result.get("memories") or []
+        if not memories:
+            return f"Nothing remembered about {result.get('query')!r}."
+        return "\n".join(f"  [{m['id']}] {m['text']}" for m in memories)
+
+    if tool == "list_memories":
+        memories = result.get("memories") or []
+        if not memories:
+            return "Nothing remembered yet."
+        counts = result.get("counts") or {}
+        total = ", ".join(
+            f"{n} {kind}{'' if n == 1 else 's'}" for kind, n in counts.items()
+        )
+        listed = "\n".join(f"  [{m['id']}] {m['text']}" for m in memories)
+        return f"{total}:\n{listed}"
 
     if tool == "system_status":
         parts = []

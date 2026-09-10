@@ -29,6 +29,7 @@ def show_tool(name: str, arguments: dict) -> None:
 
 HELP = """  /tools    list the tools Jarvis can use
   /tiers    show which tiers are available
+  /memory   list what Jarvis remembers about you
   /reset    forget this conversation
   /quit     exit"""
 
@@ -117,6 +118,10 @@ async def converse() -> int:
                 continue
             if text == "/tools":
                 print("\n".join(f"  {name}" for name in machine.tool_names))
+                continue
+            if text == "/memory":
+                listed = await dispatcher.handle("what do you remember")
+                print(listed.text)
                 continue
             if text == "/tiers":
                 print("\n".join(f"  {tier}" for tier in tiers))

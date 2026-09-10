@@ -117,21 +117,35 @@ class Jarvis:
                 self.messages.append(response)
         return last
 
+    async def _remembered(self, text: str) -> str:
+        """Memories worth putting in front of Claude for this message.
+
+        Injected into the user turn, never the system prompt: what is recalled
+        changes every message, and a varying system prompt would invalidate the
+        cached prefix on every request.
+        """
+        try:
+            result = await self._machine.call("recall", {"query": text, "limit": 5})
+        except Exception:
+            return ""  # memory is an enhancement; never fail a turn over it
+        memories = (result or {}).get("memories") or []
+        if not memories:
+            return ""
+        lines = "\n".join(f"- {m['text']}" for m in memories)
+        return f"<remembered>\n{lines}\n</remembered>"
+
     async def ask(self, text: str) -> str:
         """Send one user message and return Jarvis's reply."""
         # Taken before the user turn is added: a failed turn rolls back to the
         # last good state, rather than leaving a user message with no reply
         # (two user turns in a row is not a valid conversation).
         snapshot = list(self.messages)
-        self.messages.append(
-            {
-                "role": "user",
-                "content": [
-                    {"type": "text", "text": volatile_context()},
-                    {"type": "text", "text": text},
-                ],
-            }
-        )
+        content = [{"type": "text", "text": volatile_context()}]
+        remembered = await self._remembered(text)
+        if remembered:
+            content.append({"type": "text", "text": remembered})
+        content.append({"type": "text", "text": text})
+        self.messages.append({"role": "user", "content": content})
 
         # A turn that dies partway also leaves an assistant tool_use with no
         # matching result, which the API rejects on every later request.

@@ -217,11 +217,58 @@ async def test_machine_discovers_the_servers_tools(sandbox):
     client = FakeClient([FakeRunner([Message([Block("text", text="ok")])])])
     async with Machine() as machine:
         jarvis = Jarvis(machine, client=client)
-        assert len(jarvis.tool_names) == 16
+        assert len(jarvis.tool_names) == 20
         await jarvis.ask("hi")
         sent = client.beta.messages.calls[0]["tools"]
-        assert len(sent) == 16
+        assert len(sent) == 20
         # One breakpoint, on the last tool: it ends the whole tool prefix.
         marked = [t for t in sent if t.to_dict().get("cache_control")]
         assert len(marked) == 1
         assert marked[0].to_dict()["name"] == machine.tool_names[-1]
+
+
+# --- memory injection ---
+
+
+class RecallingMachine(FakeMachine):
+    def __init__(self, memories):
+        self.memories = memories
+        self.calls = []
+
+    async def call(self, name, arguments):
+        self.calls.append((name, arguments))
+        return {"memories": [{"id": i, "text": t} for i, t in enumerate(self.memories)]}
+
+
+async def test_memories_ride_with_the_user_turn_not_the_system_prompt():
+    """What is recalled changes per message; the system prompt must stay frozen."""
+    client = FakeClient([FakeRunner([Message([Block("text", text="ok")])])])
+    # A phrase that appears nowhere in the prompt files, so this checks the
+    # injection path rather than colliding with the profile's real contents.
+    secret = "keeps a rubber duck named Ferdinand"
+    machine = RecallingMachine([secret, "Dislikes hedging"])
+    jarvis = Jarvis(machine, client=client)
+    await jarvis.ask("what do I keep on my desk")
+
+    blocks = jarvis.messages[0]["content"]
+    remembered = [b["text"] for b in blocks if "<remembered>" in b["text"]]
+    assert remembered and secret in remembered[0]
+    # The cached half is untouched by recall.
+    system = " ".join(b["text"] for b in client.beta.messages.calls[0]["system"])
+    assert secret not in system
+
+
+async def test_no_memories_means_no_extra_block():
+    client = FakeClient([FakeRunner([Message([Block("text", text="ok")])])])
+    jarvis = Jarvis(RecallingMachine([]), client=client)
+    await jarvis.ask("hello")
+    assert len(jarvis.messages[0]["content"]) == 2  # clock and the message
+
+
+async def test_a_broken_memory_store_never_fails_a_turn():
+    class Broken(FakeMachine):
+        async def call(self, name, arguments):
+            raise RuntimeError("database is locked")
+
+    client = FakeClient([FakeRunner([Message([Block("text", text="fine")])])])
+    assert await Jarvis(Broken(), client=client).ask("hi") == "fine"

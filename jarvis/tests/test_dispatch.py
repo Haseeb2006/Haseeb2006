@@ -180,3 +180,14 @@ async def test_server_logs_do_not_land_in_the_users_prompt(tmp_path, monkeypatch
                 await machine.call("system_status", {})
     # Whatever the server said about it went to the log, not the terminal.
     assert log.exists()
+
+
+def test_memory_counts_read_as_english():
+    from core.dispatch import _summarise
+
+    one = _summarise("list_memories", {}, {"counts": {"fact": 1},
+                                           "memories": [{"id": 1, "text": "x"}]})
+    many = _summarise("list_memories", {}, {"counts": {"fact": 3},
+                                            "memories": [{"id": 1, "text": "x"}]})
+    assert one.startswith("1 fact:")
+    assert many.startswith("3 facts:")

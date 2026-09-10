@@ -12,7 +12,7 @@ from mcp.server.mcpserver import Context, MCPServer
 
 from . import __version__
 from .policy import Tier, guarded
-from .tools import apps, controls, files, media, shortcuts, system
+from .tools import apps, controls, files, media, memory, shortcuts, system
 
 server = MCPServer(
     name="jarvis",
@@ -170,6 +170,52 @@ async def write_clipboard(text: str) -> dict[str, Any]:
 async def lock_screen() -> dict[str, Any]:
     """Lock the screen immediately. There is no unlock — that needs a password."""
     return await controls.lock_screen()
+
+
+@server.tool(annotations={"readOnlyHint": True})
+@guarded(Tier.GREEN)
+async def recall(query: str, limit: int = 5) -> dict[str, Any]:
+    """Search what has been remembered about the user, by meaning and by wording.
+
+    Args:
+        query: What you are trying to remember.
+        limit: How many memories to return (1-20).
+    """
+    return await memory.recall(query=query, limit=limit)
+
+
+@server.tool(annotations={"readOnlyHint": True})
+@guarded(Tier.GREEN)
+async def list_memories(limit: int = 20) -> dict[str, Any]:
+    """List the most recently stored memories.
+
+    Args:
+        limit: How many to list (1-100).
+    """
+    return await memory.list_memories(limit=limit)
+
+
+@server.tool(annotations={"readOnlyHint": False, "destructiveHint": False})
+@guarded(Tier.AMBER)
+async def remember(text: str, kind: str = "fact") -> dict[str, Any]:
+    """Store a durable fact about the user, their setup, or their preferences.
+
+    Args:
+        text: The thing to remember, written as a standalone sentence.
+        kind: "fact" for something durable, "conversation" for an exchange.
+    """
+    return await memory.remember(text=text, kind=kind)
+
+
+@server.tool(annotations={"readOnlyHint": False, "destructiveHint": True})
+@guarded(Tier.RED)
+async def forget(memory_id: int) -> dict[str, Any]:
+    """Permanently delete one memory. Ids come from `recall` or `list_memories`.
+
+    Args:
+        memory_id: The id of the memory to delete.
+    """
+    return await memory.forget(memory_id=memory_id)
 
 
 @server.tool(annotations={"readOnlyHint": False, "destructiveHint": True})

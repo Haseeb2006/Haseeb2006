@@ -21,14 +21,17 @@ async def test_all_tools_are_registered():
         "open_app", "quit_app", "set_volume", "change_volume", "set_mute",
         "set_wifi", "set_dark_mode", "media_control", "write_clipboard",
         "lock_screen",
+        # memory
+        "recall", "list_memories", "remember", "forget",
         # needs confirmation
-        "run_shortcut",
+        "run_shortcut", "forget",
     }
 
 
 PAIRS = [
     ("open_app", "quit_app"),
     ("read_clipboard", "write_clipboard"),
+    ("remember", "forget"),
 ]
 
 

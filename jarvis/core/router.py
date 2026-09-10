@@ -66,6 +66,12 @@ RULES: list[tuple[re.Pattern[str], str]] = [
     (re.compile(r"(?:turn\s+on\s+)?light\s*mode(?:\s+on)?|dark\s*mode\s+off|turn\s+off\s+dark\s*mode", re.I), "dark_off"),
     # Clipboard: reading is safe; writing takes free text and stays with a model.
     (re.compile(r"(?:what(?:'|’)?s|what\s+is)?\s*(?:on|in)?\s*(?:my|the)?\s*clipboard|read\s+(?:the\s+)?clipboard|paste", re.I), "read_clipboard"),
+    # Memory. Storing and searching are safe; forgetting is destructive and is
+    # deliberately absent — it needs a model to resolve which memory is meant,
+    # and a confirmation before it goes.
+    (re.compile(r"remember\s+(?:that\s+)?(?P<fact>.+)", re.I), "remember"),
+    (re.compile(r"(?:what\s+do\s+you\s+remember|list\s+(?:my\s+)?memories|what\s+do\s+you\s+know\s+about\s+me)", re.I), "list_memories"),
+    (re.compile(r"(?:recall|what\s+do\s+you\s+know\s+about)\s+(?P<query>.+)", re.I), "recall"),
     # One-way by nature: there is no software unlock.
     (re.compile(r"lock(?:\s+(?:the\s+|my\s+)?(?:screen|mac|computer|laptop))?", re.I), "lock_screen"),
     # Volume. A bare number is unambiguous; the range is checked by the tool.
@@ -152,6 +158,20 @@ def match_direct(text: str) -> Decision | None:
             if not _phrase_is_a_plain_name(name):
                 return None
             return Decision(Tier.DIRECT, "quit_app", {"name": name}, "quit app")
+
+        if tool == "remember":
+            fact = groups["fact"].strip()
+            # A fact is a sentence, not a name, so the plain-name screen does not
+            # apply — only a length sanity check.
+            if not fact or len(fact) > 400:
+                return None
+            return Decision(Tier.DIRECT, "remember", {"text": fact}, "remember")
+
+        if tool == "recall":
+            query = groups["query"].strip()
+            if not query or len(query) > 200:
+                return None
+            return Decision(Tier.DIRECT, "recall", {"query": query}, "recall")
 
         if tool == "search_files":
             query = groups["query"].strip()

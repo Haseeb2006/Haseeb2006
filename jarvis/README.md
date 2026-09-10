@@ -48,6 +48,41 @@ model entirely: a model with no tools would answer from imagination.
 RED tools are unreachable from tier 0 by construction. Running a Shortcut always
 goes through a model and a confirmation.
 
+## Memory
+
+It remembers across sessions, in `~/.jarvis/memory.db` (owner-readable only).
+
+```
+› remember that my thesis is due in April
+Remembered: my thesis is due in April
+  [direct]
+
+› what do you remember
+1 fact:
+  [1] my thesis is due in April
+  [direct]
+```
+
+Two searches run on every recall, because either alone has a hole: keyword
+search cannot connect "what music do I use" to "prefers Apple Music", and
+semantic search cannot reliably find a literal string like `budget.xlsx`. A
+memory found both ways ranks above one found either way.
+
+Embeddings come from Ollama (`nomic-embed-text`) when it is there. Without it,
+recall falls back to keyword search — worse, not broken.
+
+Recalled memories are injected into the *user turn*, never the system prompt:
+what gets recalled changes every message, and a varying system prompt would
+invalidate the cached prefix on every request.
+
+`forget` really deletes — row and search index both. A memory you asked it to
+drop that turns out to still be there is worse than one never stored, so there
+is no quiet soft-delete pretending otherwise. It is RED and asks first.
+
+```bash
+ollama pull nomic-embed-text     # optional: recall by meaning
+```
+
 ## The assistant
 
 `uv run jarvis` is the same five tools, driven by Claude in your terminal instead
@@ -108,6 +143,9 @@ Basics come in pairs, so both directions are equally cheap.
 | `media_control` | AMBER | play, pause, next, previous |
 | `write_clipboard` | AMBER | replace the clipboard |
 | `lock_screen` | AMBER | lock — there is no unlock, by design |
+| `recall` / `list_memories` | GREEN | search and list what is remembered |
+| `remember` | AMBER | store a durable fact |
+| `forget` | RED | delete a memory, for good |
 | `run_shortcut` | RED | run a Shortcut (the entitlement bypass) |
 
 Toggles take a boolean rather than splitting into two tools: one tool with a

@@ -209,3 +209,31 @@ def test_no_direction_is_missing_its_opposite():
 )
 def test_fancier_phrasings_still_escalate(said):
     assert route(said) is None
+
+
+# --- memory ---
+
+
+@pytest.mark.parametrize(
+    "said,expected",
+    [
+        ("remember that I use Apple Music", ("remember", {"text": "I use Apple Music"})),
+        ("remember I hate hedging", ("remember", {"text": "I hate hedging"})),
+        ("what do you remember", ("list_memories", {})),
+        ("what do you know about me", ("list_memories", {})),
+        ("recall my music setup", ("recall", {"query": "my music setup"})),
+        ("what do you know about my thesis", ("recall", {"query": "my thesis"})),
+    ],
+)
+def test_memory_commands(said, expected):
+    assert route(said) == expected
+
+
+@pytest.mark.parametrize(
+    "said",
+    ["forget that", "forget memory 3", "forget what I said about Ali", "forget it"],
+)
+def test_forgetting_never_happens_without_a_model(said):
+    """Deletion is permanent, and which memory is meant needs judgement."""
+    decision = match_direct(said)
+    assert decision is None or decision.tool != "forget"
