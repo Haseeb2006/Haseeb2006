@@ -89,10 +89,11 @@ async def _wifi() -> tuple[str | None, str | None]:
     ssid, reason = parse_ssid(result.stdout)
     if ssid:
         return ssid, None
-    if reason and "Not connected" in reason:
-        return None, reason
 
-    # networksetup would not say. Try the other source before blaming permissions.
+    # networksetup did not name a network. Ask the interface itself before
+    # concluding anything — it is the ground truth, and networksetup reports
+    # "not associated" in cases where the interface does hold an SSID. Reporting
+    # "not connected" when you are connected is worse than reporting nothing.
     summary = await macos.run("ipconfig", "getsummary", device)
     ssid = parse_ssid_from_summary(summary.stdout)
     if ssid:

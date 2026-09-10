@@ -92,3 +92,78 @@ def test_ipconfig_summary_without_an_ssid():
 
 def test_ipconfig_redacted_ssid_is_not_treated_as_a_name():
     assert parse_ssid_from_summary("  SSID : <redacted>") is None
+
+
+# --- probe ordering: which source gets the last word ---
+
+import pytest
+
+from mcp_server import macos
+from mcp_server.tools import system
+
+PORTS = "Hardware Port: Wi-Fi\nDevice: en0\nEthernet Address: a4:83:e7:11:22:33\n"
+
+
+def _fake_run(responses):
+    """Reply to each command by its first two argv items."""
+
+    async def run(*argv, **kwargs):
+        for key, output in responses.items():
+            if argv[:2] == key:
+                return macos.Completed(0, output, "")
+        return macos.Completed(1, "", "unexpected command")
+
+    return run
+
+
+async def test_interface_overrules_a_wrong_not_associated_verdict(monkeypatch):
+    """networksetup can claim "not associated" while the interface holds an SSID."""
+    monkeypatch.setattr(
+        macos,
+        "run",
+        _fake_run(
+            {
+                ("networksetup", "-listallhardwareports"): PORTS,
+                ("networksetup", "-getairportnetwork"): (
+                    "You are not associated with an AirPort network.\n"
+                ),
+                ("ipconfig", "getsummary"): "  SSID : Haseeb 5GHz\n",
+            }
+        ),
+    )
+    assert await system._wifi() == ("Haseeb 5GHz", None)
+
+
+async def test_not_connected_stands_when_both_sources_agree(monkeypatch):
+    monkeypatch.setattr(
+        macos,
+        "run",
+        _fake_run(
+            {
+                ("networksetup", "-listallhardwareports"): PORTS,
+                ("networksetup", "-getairportnetwork"): (
+                    "You are not associated with an AirPort network.\n"
+                ),
+                ("ipconfig", "getsummary"): "<dictionary> {\n  Router : 10.0.0.1\n}",
+            }
+        ),
+    )
+    ssid, reason = await system._wifi()
+    assert ssid is None
+    assert "Not connected" in reason
+
+
+async def test_normal_connected_case_needs_only_networksetup(monkeypatch):
+    monkeypatch.setattr(
+        macos,
+        "run",
+        _fake_run(
+            {
+                ("networksetup", "-listallhardwareports"): PORTS,
+                ("networksetup", "-getairportnetwork"): (
+                    "Current Wi-Fi Network: Haseeb 5GHz\n"
+                ),
+            }
+        ),
+    )
+    assert await system._wifi() == ("Haseeb 5GHz", None)
