@@ -12,7 +12,7 @@ from mcp.server.mcpserver import Context, MCPServer
 
 from . import __version__
 from .policy import Tier, guarded
-from .tools import apps, files, shortcuts, system
+from .tools import apps, controls, files, media, shortcuts, system
 
 server = MCPServer(
     name="jarvis",
@@ -83,6 +83,93 @@ async def set_volume(level: int) -> dict[str, Any]:
         level: Volume percentage. 0 mutes.
     """
     return await system.set_volume(level=level)
+
+
+@server.tool(annotations={"readOnlyHint": True})
+@guarded(Tier.GREEN)
+async def now_playing() -> dict[str, Any]:
+    """Report what Apple Music is currently playing, if anything."""
+    return await media.now_playing()
+
+
+@server.tool(annotations={"readOnlyHint": True})
+@guarded(Tier.GREEN)
+async def read_clipboard() -> dict[str, Any]:
+    """Read the text currently on the clipboard."""
+    return await controls.read_clipboard()
+
+
+@server.tool(annotations={"readOnlyHint": False, "destructiveHint": False})
+@guarded(Tier.AMBER)
+async def media_control(action: str) -> dict[str, Any]:
+    """Control Apple Music playback.
+
+    Args:
+        action: One of play, pause, playpause, next, previous.
+    """
+    return await media.media_control(action=action)
+
+
+@server.tool(annotations={"readOnlyHint": False, "destructiveHint": False})
+@guarded(Tier.AMBER)
+async def change_volume(delta: int) -> dict[str, Any]:
+    """Raise or lower the volume by a number of percentage points.
+
+    Args:
+        delta: Points to change by. Positive is louder, negative is quieter.
+    """
+    return await controls.change_volume(delta=delta)
+
+
+@server.tool(annotations={"readOnlyHint": False, "destructiveHint": False})
+@guarded(Tier.AMBER)
+async def set_mute(muted: bool) -> dict[str, Any]:
+    """Mute or unmute the output.
+
+    Args:
+        muted: True to mute, False to unmute.
+    """
+    return await controls.set_mute(muted=muted)
+
+
+@server.tool(annotations={"readOnlyHint": False, "destructiveHint": False})
+@guarded(Tier.AMBER)
+async def set_wifi(on: bool) -> dict[str, Any]:
+    """Turn Wi-Fi on or off.
+
+    Args:
+        on: True to turn Wi-Fi on, False to turn it off.
+    """
+    return await controls.set_wifi(on=on)
+
+
+@server.tool(annotations={"readOnlyHint": False, "destructiveHint": False})
+@guarded(Tier.AMBER)
+async def set_dark_mode(on: bool) -> dict[str, Any]:
+    """Turn the system's dark appearance on or off.
+
+    Args:
+        on: True for dark mode, False for light mode.
+    """
+    return await controls.set_dark_mode(on=on)
+
+
+@server.tool(annotations={"readOnlyHint": False, "destructiveHint": False})
+@guarded(Tier.AMBER)
+async def write_clipboard(text: str) -> dict[str, Any]:
+    """Put text on the clipboard, replacing what was there.
+
+    Args:
+        text: The text to copy.
+    """
+    return await controls.write_clipboard(text=text)
+
+
+@server.tool(annotations={"readOnlyHint": False, "destructiveHint": False})
+@guarded(Tier.AMBER)
+async def lock_screen() -> dict[str, Any]:
+    """Lock the screen immediately. There is no unlock — that needs a password."""
+    return await controls.lock_screen()
 
 
 @server.tool(annotations={"readOnlyHint": False, "destructiveHint": True})

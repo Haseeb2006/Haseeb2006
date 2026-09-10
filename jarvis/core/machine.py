@@ -10,6 +10,7 @@ import json
 import os
 import sys
 from contextlib import AsyncExitStack
+from pathlib import Path
 from typing import Any, Awaitable, Callable
 
 from anthropic.lib.tools.mcp import async_mcp_tool
@@ -19,6 +20,7 @@ from mcp.client.stdio import stdio_client
 from .confirm import ask_terminal
 
 CACHE: dict[str, str] = {"type": "ephemeral"}
+SERVER_LOG = Path("~/.jarvis/server.log").expanduser()
 
 
 class ToolFailed(Exception):
@@ -27,21 +29,34 @@ class ToolFailed(Exception):
 
 class Machine:
     def __init__(
-        self, elicitation_callback: Callable[..., Awaitable[Any]] | None = None
+        self,
+        elicitation_callback: Callable[..., Awaitable[Any]] | None = None,
+        errlog: Any = None,
     ) -> None:
         self._elicit = elicitation_callback or ask_terminal
+        # The server logs to stderr, which the client inherits — its INFO lines
+        # would land in the middle of the user's prompt. Kept, but out of the way.
+        self._errlog = errlog
         self._stack = AsyncExitStack()
         self._session: ClientSession | None = None
         self.claude_tools: list[Any] = []
         self.tool_names: list[str] = []
 
     async def __aenter__(self) -> "Machine":
+        SERVER_LOG.parent.mkdir(parents=True, exist_ok=True, mode=0o700)
         params = StdioServerParameters(
             command=sys.executable,
             args=["-m", "mcp_server.server"],
             env=dict(os.environ),
         )
-        read, write = await self._stack.enter_async_context(stdio_client(params))
+        errlog = self._errlog
+        if errlog is None:
+            errlog = self._stack.enter_context(
+                open(SERVER_LOG, "a", encoding="utf-8", buffering=1)
+            )
+        read, write = await self._stack.enter_async_context(
+            stdio_client(params, errlog=errlog)
+        )
         self._session = await self._stack.enter_async_context(
             ClientSession(read, write, elicitation_callback=self._elicit)
         )

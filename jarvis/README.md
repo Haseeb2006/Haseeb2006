@@ -25,7 +25,7 @@ Every message goes to the cheapest tier that can actually handle it:
 
 | Tier | Handles | Cost |
 |---|---|---|
-| **0 — rules** | `volume 40`, `battery`, `open Music`, `close WhatsApp`, `find resume` | free, instant |
+| **0 — rules** | `battery`, `volume up`, `mute`/`unmute`, `play`/`pause`, `open`/`close X`, `wifi off`, `dark mode`, `lock`, `find resume` | free, instant |
 | **1 — Ollama** | general questions, small talk | free, local |
 | **2 — Claude** | anything multi-step, ambiguous, or reasoned | paid |
 
@@ -91,15 +91,27 @@ cannot reach a server on your machine.
 
 ## Tools
 
-| Tool | Tier | Does |
+Basics come in pairs, so both directions are equally cheap.
+
+| Tool | Tier | |
 |---|---|---|
 | `system_status` | GREEN | battery, wifi, volume, disk, uptime, frontmost app |
-| `set_volume` | AMBER | set output volume 0-100 |
 | `search_files` | GREEN | Spotlight search, confined to allowlisted roots |
-| `open_app` | AMBER | launch a Mac application by name |
-| `quit_app` | AMBER | quit a running application, letting it save |
 | `list_shortcuts` | GREEN | names of your Shortcuts |
-| `run_shortcut` | RED | run a Shortcut by name (the entitlement bypass) |
+| `now_playing` | GREEN | what Apple Music is playing |
+| `read_clipboard` | GREEN | current clipboard text |
+| `open_app` / `quit_app` | AMBER | launch / quit an application |
+| `set_volume` / `change_volume` | AMBER | absolute / relative volume |
+| `set_mute` | AMBER | mute and unmute (restores the previous level) |
+| `set_wifi` | AMBER | Wi-Fi on and off |
+| `set_dark_mode` | AMBER | dark and light appearance |
+| `media_control` | AMBER | play, pause, next, previous |
+| `write_clipboard` | AMBER | replace the clipboard |
+| `lock_screen` | AMBER | lock — there is no unlock, by design |
+| `run_shortcut` | RED | run a Shortcut (the entitlement bypass) |
+
+Toggles take a boolean rather than splitting into two tools: one tool with a
+state cannot drift out of sync the way `wifi_on` and `wifi_off` could.
 
 ## Permission tiers
 

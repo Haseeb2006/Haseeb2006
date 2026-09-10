@@ -14,14 +14,37 @@ async def _tool(name):
 async def test_all_tools_are_registered():
     names = {t.name for t in await server.list_tools()}
     assert names == {
-        "system_status",
-        "search_files",
-        "list_shortcuts",
-        "open_app",
-        "quit_app",
-        "set_volume",
+        # read-only
+        "system_status", "search_files", "list_shortcuts", "now_playing",
+        "read_clipboard",
+        # reversible
+        "open_app", "quit_app", "set_volume", "change_volume", "set_mute",
+        "set_wifi", "set_dark_mode", "media_control", "write_clipboard",
+        "lock_screen",
+        # needs confirmation
         "run_shortcut",
     }
+
+
+PAIRS = [
+    ("open_app", "quit_app"),
+    ("read_clipboard", "write_clipboard"),
+]
+
+
+async def test_paired_tools_both_exist():
+    """Every basic action should have its opposite, where one can exist."""
+    names = {t.name for t in await server.list_tools()}
+    for forward, back in PAIRS:
+        assert forward in names and back in names, f"{forward}/{back}"
+
+
+async def test_toggles_take_a_boolean_rather_than_splitting_in_two():
+    """One tool with a state cannot drift out of sync the way two can."""
+    for name in ("set_mute", "set_wifi", "set_dark_mode"):
+        schema = (await _tool(name)).input_schema
+        (field,) = schema["properties"].values()
+        assert field["type"] == "boolean", name
 
 
 async def test_context_is_not_exposed_as_a_parameter():

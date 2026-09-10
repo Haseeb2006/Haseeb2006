@@ -28,8 +28,14 @@ def test_volume(said, level):
 
 
 @pytest.mark.parametrize("said", ["mute", "Mute", "mute the sound", "mute audio"])
-def test_mute_is_volume_zero(said):
-    assert route(said) == ("set_volume", {"level": 0})
+def test_mute(said):
+    assert route(said) == ("set_mute", {"muted": True})
+
+
+@pytest.mark.parametrize("said", ["unmute", "Unmute", "un-mute", "unmute the sound"])
+def test_unmute_is_its_own_command(said):
+    """Unmuting restores the previous level; volume 0 would not."""
+    assert route(said) == ("set_mute", {"muted": False})
 
 
 @pytest.mark.parametrize(
@@ -91,8 +97,7 @@ def test_list_shortcuts(said):
         "how do I check the battery on a Mac",
         "write me a script that sets the volume",
         "volume 400",                           # out of range: let a model say so
-        "volume up",                            # relative, needs the current value
-        "turn the volume down a bit",
+        "turn the volume down a bit",           # "a bit" is not a step we define
         "find the file I was working on yesterday afternoon",
         "",
         "   ",
@@ -143,4 +148,64 @@ def test_close_app(said, app):
     ],
 )
 def test_close_falls_through(said):
+    assert route(said) is None
+
+
+# --- every pair, both ways ---
+
+PAIRED = [
+    ("volume up",        ("change_volume", {"delta": 10})),
+    ("volume down",      ("change_volume", {"delta": -10})),
+    ("louder",           ("change_volume", {"delta": 10})),
+    ("quieter",          ("change_volume", {"delta": -10})),
+    ("mute",             ("set_mute", {"muted": True})),
+    ("unmute",           ("set_mute", {"muted": False})),
+    ("play",             ("media_control", {"action": "play"})),
+    ("pause",            ("media_control", {"action": "pause"})),
+    ("next track",       ("media_control", {"action": "next"})),
+    ("previous track",   ("media_control", {"action": "previous"})),
+    ("skip",             ("media_control", {"action": "next"})),
+    ("turn on wifi",     ("set_wifi", {"on": True})),
+    ("turn off wifi",    ("set_wifi", {"on": False})),
+    ("wifi off",         ("set_wifi", {"on": False})),
+    ("dark mode",        ("set_dark_mode", {"on": True})),
+    ("light mode",       ("set_dark_mode", {"on": False})),
+    ("dark mode off",    ("set_dark_mode", {"on": False})),
+    ("open Music",       ("open_app", {"name": "Music"})),
+    ("close Music",      ("quit_app", {"name": "Music"})),
+    ("lock screen",      ("lock_screen", {})),
+    ("what's playing",   ("now_playing", {})),
+    ("clipboard",        ("read_clipboard", {})),
+]
+
+
+@pytest.mark.parametrize("said,expected", PAIRED, ids=[p[0] for p in PAIRED])
+def test_every_basic_and_its_opposite(said, expected):
+    assert route(said) == expected
+
+
+def test_no_direction_is_missing_its_opposite():
+    """If a rule can turn something on, a rule must be able to turn it off."""
+    both_ways = {"change_volume", "set_mute", "set_wifi", "set_dark_mode"}
+    seen: dict[str, set] = {tool: set() for tool in both_ways}
+    for said, (tool, args) in PAIRED:
+        if tool in both_ways:
+            seen[tool].add(tuple(sorted((k, v) for k, v in args.items())))
+    for tool, variants in seen.items():
+        assert len(variants) >= 2, f"{tool} only has one direction routed"
+
+
+@pytest.mark.parametrize(
+    "said",
+    [
+        "play something by Kendrick",   # picking a track needs a model
+        "pause for a second",
+        "skip to the good part",
+        "lock in",
+        "turn the wifi off after 10pm",
+        "should I use dark mode",
+        "copy this to my clipboard",    # writing takes free text
+    ],
+)
+def test_fancier_phrasings_still_escalate(said):
     assert route(said) is None

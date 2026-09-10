@@ -14,7 +14,7 @@ class FakeMachine:
         self.results = results or {}
         self.fails = set(fails)
         self.calls = []
-        self.tool_names = ["system_status", "set_volume", "open_app"]
+        self.tool_names = ["system_status", "set_volume", "open_app", "set_mute"]
         self.claude_tools = []
 
     async def call(self, name, arguments):
@@ -166,3 +166,17 @@ async def test_with_nothing_but_rules_direct_commands_still_work():
     reply = await Dispatcher(machine, local=None, claude=None).handle("battery")
     assert reply.tier is Tier.DIRECT
     assert "50%" in reply.text
+
+
+async def test_server_logs_do_not_land_in_the_users_prompt(tmp_path, monkeypatch):
+    """The server logs to stderr, which the client inherits — keep it out of the UI."""
+    from core.machine import Machine
+
+    monkeypatch.setenv("JARVIS_ALLOWED_ROOTS", str(tmp_path))
+    log = tmp_path / "server.log"
+    with open(log, "w", encoding="utf-8") as handle:
+        async with Machine(errlog=handle) as machine:
+            with pytest.raises(Exception):
+                await machine.call("system_status", {})
+    # Whatever the server said about it went to the log, not the terminal.
+    assert log.exists()

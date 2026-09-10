@@ -23,6 +23,8 @@ MACHINE_WORDS = (
     "disk", "storage", "shortcut", "open", "launch", "close", "screen",
     "mute", "download", "desktop", "document", "music", "spotlight", "finder",
     "quit", "whatsapp", "safari", "chrome", "terminal", "running",
+    "clipboard", "playing", "track", "song", "play", "pause", "lock",
+    "louder", "quieter", "dark mode", "light mode", "brightness",
 )
 
 
@@ -54,6 +56,45 @@ def _summarise(tool: str, arguments: dict[str, Any], result: Any) -> str:
         if result.get("already_closed"):
             return result.get("note", f"{arguments.get('name')} is not running.")
         return f"Closed {result.get('quit')}."
+
+    if tool == "change_volume":
+        return f"Volume {result.get('volume_percent')}% (was {result.get('previous_percent')}%)."
+
+    if tool == "set_mute":
+        return "Muted." if result.get("muted") else "Unmuted."
+
+    if tool == "set_wifi":
+        return f"Wi-Fi {'on' if result.get('wifi_on') else 'off'}."
+
+    if tool == "set_dark_mode":
+        return "Dark mode on." if result.get("dark_mode") else "Light mode on."
+
+    if tool == "lock_screen":
+        return "Locked."
+
+    if tool == "media_control":
+        if not result.get("applied"):
+            return result.get("note", "Nothing to control.")
+        return {
+            "play": "Playing.", "pause": "Paused.",
+            "next": "Skipped ahead.", "previous": "Went back.",
+            "playpause": "Toggled playback.",
+        }.get(result.get("action"), "Done.")
+
+    if tool == "now_playing":
+        if not result.get("track"):
+            return result.get("note", "Nothing is playing.")
+        line = f"{result['track']}"
+        if result.get("artist"):
+            line += f" — {result['artist']}"
+        return line if result.get("playing") else f"{line} (paused)"
+
+    if tool == "read_clipboard":
+        if result.get("empty"):
+            return "The clipboard is empty."
+        text = result.get("text", "")
+        preview = text if len(text) <= 400 else text[:400] + f"… ({len(text)} chars)"
+        return f"Clipboard:\n{preview}"
 
     if tool == "system_status":
         parts = []

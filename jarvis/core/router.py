@@ -41,9 +41,33 @@ NOT_AN_APP = {
     "tabs", "windows", "everything", "all", "this", "that", "it", "my",
 }
 
+STEP = 10  # what "louder" and "quieter" mean, in percentage points
+
 STATUS_WORDS = r"battery|charge|status|wifi|wi-?fi|network|disk|storage|space|uptime"
 
+# Each pair is written together so neither direction can be forgotten.
 RULES: list[tuple[re.Pattern[str], str]] = [
+    # Volume, relative. "up"/"down" need the current level, so they are their own
+    # tool rather than a read followed by a write.
+    (re.compile(r"(?:turn\s+)?(?:the\s+)?volume\s+up|louder|turn\s+it\s+up", re.I), "louder"),
+    (re.compile(r"(?:turn\s+)?(?:the\s+)?volume\s+down|quieter|turn\s+it\s+down", re.I), "quieter"),
+    (re.compile(r"un-?mute(?:\s+(?:the\s+)?(?:volume|sound|audio))?", re.I), "unmute"),
+    # Playback.
+    (re.compile(r"(?:what(?:'|’)?s|what\s+is)?\s*(?:currently\s+)?(?:now\s+)?playing", re.I), "now_playing"),
+    (re.compile(r"(?:play|resume)(?:\s+(?:the\s+)?(?:music|song|track))?", re.I), "play"),
+    (re.compile(r"(?:pause|stop)(?:\s+(?:the\s+)?(?:music|song|track|playback))?", re.I), "pause"),
+    (re.compile(r"(?:next|skip)(?:\s+(?:the\s+)?(?:track|song))?", re.I), "next"),
+    (re.compile(r"(?:previous|prev|last|go\s+back)(?:\s+(?:the\s+)?(?:track|song))?", re.I), "previous"),
+    # Wi-Fi power. "wifi" alone is a question and matches the status rule above.
+    (re.compile(r"(?:turn\s+)?(?:on\s+)?(?:the\s+)?wi-?fi\s+on|turn\s+on\s+(?:the\s+)?wi-?fi|enable\s+wi-?fi", re.I), "wifi_on"),
+    (re.compile(r"(?:turn\s+)?(?:the\s+)?wi-?fi\s+off|turn\s+off\s+(?:the\s+)?wi-?fi|disable\s+wi-?fi", re.I), "wifi_off"),
+    # Appearance.
+    (re.compile(r"(?:turn\s+on\s+)?dark\s*mode(?:\s+on)?|go\s+dark", re.I), "dark_on"),
+    (re.compile(r"(?:turn\s+on\s+)?light\s*mode(?:\s+on)?|dark\s*mode\s+off|turn\s+off\s+dark\s*mode", re.I), "dark_off"),
+    # Clipboard: reading is safe; writing takes free text and stays with a model.
+    (re.compile(r"(?:what(?:'|’)?s|what\s+is)?\s*(?:on|in)?\s*(?:my|the)?\s*clipboard|read\s+(?:the\s+)?clipboard|paste", re.I), "read_clipboard"),
+    # One-way by nature: there is no software unlock.
+    (re.compile(r"lock(?:\s+(?:the\s+|my\s+)?(?:screen|mac|computer|laptop))?", re.I), "lock_screen"),
     # Volume. A bare number is unambiguous; the range is checked by the tool.
     (re.compile(r"(?:set\s+)?volume\s*(?:to\s*)?(?P<level>\d{1,3})\s*%?", re.I), "set_volume"),
     (re.compile(r"mute(?:\s+(?:the\s+)?(?:volume|sound|audio))?", re.I), "mute"),
@@ -99,7 +123,23 @@ def match_direct(text: str) -> Decision | None:
             return Decision(Tier.DIRECT, "set_volume", {"level": level}, "volume")
 
         if tool == "mute":
-            return Decision(Tier.DIRECT, "set_volume", {"level": 0}, "mute")
+            return Decision(Tier.DIRECT, "set_mute", {"muted": True}, "mute")
+
+        if tool == "unmute":
+            return Decision(Tier.DIRECT, "set_mute", {"muted": False}, "unmute")
+
+        if tool in ("louder", "quieter"):
+            step = STEP if tool == "louder" else -STEP
+            return Decision(Tier.DIRECT, "change_volume", {"delta": step}, tool)
+
+        if tool in ("play", "pause", "next", "previous"):
+            return Decision(Tier.DIRECT, "media_control", {"action": tool}, tool)
+
+        if tool in ("wifi_on", "wifi_off"):
+            return Decision(Tier.DIRECT, "set_wifi", {"on": tool == "wifi_on"}, tool)
+
+        if tool in ("dark_on", "dark_off"):
+            return Decision(Tier.DIRECT, "set_dark_mode", {"on": tool == "dark_on"}, tool)
 
         if tool == "open_app":
             name = groups["name"].strip()
