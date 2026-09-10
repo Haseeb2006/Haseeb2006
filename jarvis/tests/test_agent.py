@@ -222,12 +222,13 @@ async def test_machine_discovers_the_servers_tools(sandbox):
             "search_files",
             "list_shortcuts",
             "open_app",
+            "quit_app",
             "set_volume",
             "run_shortcut",
         }
         await jarvis.ask("hi")
         sent = client.beta.messages.calls[0]["tools"]
-        assert len(sent) == 6
+        assert len(sent) == 7
         # One breakpoint, on the last tool: it ends the whole tool prefix.
         marked = [t for t in sent if t.to_dict().get("cache_control")]
         assert len(marked) == 1

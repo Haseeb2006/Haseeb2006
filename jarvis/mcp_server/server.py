@@ -65,6 +65,17 @@ async def open_app(name: str) -> dict[str, Any]:
 
 @server.tool(annotations={"readOnlyHint": False, "destructiveHint": False})
 @guarded(Tier.AMBER)
+async def quit_app(name: str) -> dict[str, Any]:
+    """Quit a running application, letting it save and close normally.
+
+    Args:
+        name: The application's name, e.g. "WhatsApp" or "Safari".
+    """
+    return await apps.quit_app(name=name)
+
+
+@server.tool(annotations={"readOnlyHint": False, "destructiveHint": False})
+@guarded(Tier.AMBER)
 async def set_volume(level: int) -> dict[str, Any]:
     """Set the output volume to a percentage from 0 to 100.
 

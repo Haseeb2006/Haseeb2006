@@ -79,6 +79,22 @@ async def osascript(script: str, timeout: float = DEFAULT_TIMEOUT) -> Completed:
     return await run("osascript", "-e", script, timeout=timeout)
 
 
+async def osascript_argv(lines: list[str], *args: str, timeout: float = DEFAULT_TIMEOUT) -> Completed:
+    """Run an AppleScript that takes its inputs as `argv`, never as interpolated text.
+
+    The script body is a fixed list of lines; user-supplied values arrive through
+    `on run argv`, so a name containing quotes or AppleScript syntax is data.
+    """
+    for arg in args:
+        # An argument starting with "-" would be read as an option by osascript.
+        if arg.startswith("-"):
+            raise ValueError(f"refusing to pass {arg!r} as a script argument")
+    argv = ["osascript"]
+    for line in lines:
+        argv += ["-e", line]
+    return await run(*argv, *args, timeout=timeout)
+
+
 async def probe(coro) -> str | None:
     """Await a probe, returning None instead of raising.
 

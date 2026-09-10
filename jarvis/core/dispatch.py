@@ -22,6 +22,7 @@ MACHINE_WORDS = (
     "file", "folder", "app", "battery", "volume", "wifi", "wi-fi", "network",
     "disk", "storage", "shortcut", "open", "launch", "close", "screen",
     "mute", "download", "desktop", "document", "music", "spotlight", "finder",
+    "quit", "whatsapp", "safari", "chrome", "terminal", "running",
 )
 
 
@@ -48,6 +49,11 @@ def _summarise(tool: str, arguments: dict[str, Any], result: Any) -> str:
 
     if tool == "open_app":
         return f"Opened {result.get('opened', arguments.get('name'))}."
+
+    if tool == "quit_app":
+        if result.get("already_closed"):
+            return result.get("note", f"{arguments.get('name')} is not running.")
+        return f"Closed {result.get('quit')}."
 
     if tool == "system_status":
         parts = []

@@ -112,3 +112,35 @@ def test_red_tools_are_never_reachable_from_tier_zero():
 
 def test_a_match_is_always_tier_zero():
     assert match_direct("volume 40").tier is Tier.DIRECT
+
+
+# --- closing apps ---
+
+
+@pytest.mark.parametrize(
+    "said,app",
+    [
+        ("close whatsapp", "whatsapp"), ("Close WhatsApp", "WhatsApp"),
+        ("quit Safari", "Safari"), ("close Visual Studio Code", "Visual Studio Code"),
+        ("exit Music", "Music"), ("close the Finder", "Finder"),
+    ],
+)
+def test_close_app(said, app):
+    assert route(said) == ("quit_app", {"name": app})
+
+
+@pytest.mark.parametrize(
+    "said",
+    [
+        "close all my tabs",       # not an app
+        "close the window",
+        "close everything",
+        "quit",                    # this leaves the CLI; never a tool call
+        "exit",
+        "close whatsapp and open Music",
+        "should I close whatsapp",
+        "how do I quit an app on a Mac",
+    ],
+)
+def test_close_falls_through(said):
+    assert route(said) is None

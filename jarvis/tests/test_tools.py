@@ -174,3 +174,53 @@ async def test_probe_swallows_failures():
         raise OSError("no battery")
 
     assert await macos.probe(boom()) is None
+
+
+# --- quitting apps ---
+
+
+async def test_quit_app_matches_the_running_name_case_insensitively(monkeypatch):
+    from mcp_server.tools import apps
+
+    calls = []
+
+    async def fake_argv(lines, *args, **kwargs):
+        calls.append((lines, args))
+        if "System Events" in lines[0]:
+            return macos.Completed(0, "WhatsApp, Safari, Terminal", "")
+        return macos.Completed(0, "", "")
+
+    monkeypatch.setattr(macos, "is_macos", lambda: True)
+    monkeypatch.setattr(macos, "osascript_argv", fake_argv)
+
+    result = await apps.quit_app(name="whatsapp")
+    assert result == {"quit": "WhatsApp", "already_closed": False}
+    # The real casing reaches AppleScript, and as an argument, not inside the script.
+    assert calls[1][1] == ("WhatsApp",)
+    assert "WhatsApp" not in " ".join(calls[1][0])
+
+
+async def test_quitting_an_app_that_is_not_running_does_not_launch_it(monkeypatch):
+    """AppleScript's `quit` can start a stopped app first — a baffling outcome."""
+    from mcp_server.tools import apps
+
+    quit_attempts = []
+
+    async def fake_argv(lines, *args, **kwargs):
+        if "System Events" in lines[0]:
+            return macos.Completed(0, "Safari, Terminal", "")
+        quit_attempts.append(args)
+        return macos.Completed(0, "", "")
+
+    monkeypatch.setattr(macos, "is_macos", lambda: True)
+    monkeypatch.setattr(macos, "osascript_argv", fake_argv)
+
+    result = await apps.quit_app(name="WhatsApp")
+    assert result["already_closed"] is True
+    assert quit_attempts == [], "must not run quit against a stopped app"
+    assert "Safari" in result["note"]
+
+
+async def test_script_arguments_cannot_be_read_as_options():
+    with pytest.raises(ValueError, match="refusing"):
+        await macos.osascript_argv(["on run argv", "end run"], "-e")

@@ -38,6 +38,7 @@ CLAUSE_MARKERS = (" and ", " then ", " but ", " if ", " so ", ",", ";", "?")
 NOT_AN_APP = {
     "a", "an", "the", "up", "new", "file", "files", "folder", "window", "tab",
     "door", "doors", "issue", "pr", "account", "session", "project", "one",
+    "tabs", "windows", "everything", "all", "this", "that", "it", "my",
 }
 
 STATUS_WORDS = r"battery|charge|status|wifi|wi-?fi|network|disk|storage|space|uptime"
@@ -56,6 +57,7 @@ RULES: list[tuple[re.Pattern[str], str]] = [
     (re.compile(r"(?:list|show)?\s*(?:my|the)?\s*shortcuts", re.I), "list_shortcuts"),
     # Free-text captures, screened below.
     (re.compile(r"(?:open|launch|start|fire\s+up)\s+(?:the\s+|my\s+)?(?P<name>.+)", re.I), "open_app"),
+    (re.compile(r"(?:close|quit|exit)\s+(?:the\s+|my\s+)?(?P<name>.+)", re.I), "quit_app"),
     (re.compile(r"(?:find|search\s+for|locate|look\s+for)\s+(?:my\s+|the\s+|a\s+)?(?P<query>.+)", re.I), "search_files"),
 ]
 
@@ -104,6 +106,12 @@ def match_direct(text: str) -> Decision | None:
             if not _phrase_is_a_plain_name(name):
                 return None
             return Decision(Tier.DIRECT, "open_app", {"name": name}, "open app")
+
+        if tool == "quit_app":
+            name = groups["name"].strip()
+            if not _phrase_is_a_plain_name(name):
+                return None
+            return Decision(Tier.DIRECT, "quit_app", {"name": name}, "quit app")
 
         if tool == "search_files":
             query = groups["query"].strip()

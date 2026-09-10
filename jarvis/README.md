@@ -25,7 +25,7 @@ Every message goes to the cheapest tier that can actually handle it:
 
 | Tier | Handles | Cost |
 |---|---|---|
-| **0 — rules** | `volume 40`, `battery`, `open Music`, `find resume` | free, instant |
+| **0 — rules** | `volume 40`, `battery`, `open Music`, `close WhatsApp`, `find resume` | free, instant |
 | **1 — Ollama** | general questions, small talk | free, local |
 | **2 — Claude** | anything multi-step, ambiguous, or reasoned | paid |
 
@@ -97,6 +97,7 @@ cannot reach a server on your machine.
 | `set_volume` | AMBER | set output volume 0-100 |
 | `search_files` | GREEN | Spotlight search, confined to allowlisted roots |
 | `open_app` | AMBER | launch a Mac application by name |
+| `quit_app` | AMBER | quit a running application, letting it save |
 | `list_shortcuts` | GREEN | names of your Shortcuts |
 | `run_shortcut` | RED | run a Shortcut by name (the entitlement bypass) |
 
