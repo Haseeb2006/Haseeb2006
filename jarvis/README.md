@@ -95,7 +95,7 @@ Basics come in pairs, so both directions are equally cheap.
 
 | Tool | Tier | |
 |---|---|---|
-| `system_status` | GREEN | battery, wifi, volume, disk, uptime, frontmost app |
+| `system_status` | GREEN | battery, volume, mute, wifi, dark mode, disk, uptime, frontmost app |
 | `search_files` | GREEN | Spotlight search, confined to allowlisted roots |
 | `list_shortcuts` | GREEN | names of your Shortcuts |
 | `now_playing` | GREEN | what Apple Music is playing |
@@ -137,7 +137,13 @@ Every call — allowed, refused, or failed — lands in `~/.jarvis/audit.jsonl`.
 ## Tests
 
 ```bash
-uv run pytest
+uv run pytest                             # 258 tests, any platform
+uv run python selftest.py                 # exercise every tool on this Mac
+uv run python selftest.py --disruptive    # also playback and app launching
 ```
 
-Tests run on any platform — the macOS shell-outs are faked.
+`pytest` fakes the macOS shell-outs so it runs anywhere. `selftest.py` runs the
+real ones and reports what works — read-only tools run freely, reversible ones
+are restored to the state they were in, and anything that would interrupt you
+needs `--disruptive`. `run_shortcut` is never exercised automatically: it is RED
+and could send a message.

@@ -195,3 +195,18 @@ async def test_normal_connected_case_needs_only_networksetup(monkeypatch):
         ),
     )
     assert await system._wifi() == ("Haseeb 5GHz", None)
+
+
+# --- boolean readings ---
+
+
+def test_applescript_booleans():
+    from mcp_server.tools.system import parse_boolean
+
+    assert parse_boolean("true") is True
+    assert parse_boolean(" FALSE \n") is False
+    # Anything unexpected reads as unknown, not as False — an unreadable setting
+    # and a setting that is off are different facts.
+    assert parse_boolean("") is None
+    assert parse_boolean("yes") is None
+    assert parse_boolean("Not authorised") is None

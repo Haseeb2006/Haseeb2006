@@ -33,6 +33,24 @@ LOCATION_HINT = (
 )
 
 
+def parse_boolean(output: str) -> bool | None:
+    """AppleScript prints booleans as a bare `true` or `false`."""
+    return {"true": True, "false": False}.get(output.strip().lower())
+
+
+async def _muted() -> bool | None:
+    result = await macos.osascript("output muted of (get volume settings)")
+    return parse_boolean(result.stdout)
+
+
+async def _dark_mode() -> bool | None:
+    result = await macos.osascript(
+        'tell application "System Events" to tell appearance preferences '
+        "to get dark mode"
+    )
+    return parse_boolean(result.stdout)
+
+
 def parse_wifi_device(hardware_ports: str) -> str | None:
     """Find the Wi-Fi interface in `networksetup -listallhardwareports` output.
 
@@ -180,6 +198,10 @@ async def system_status() -> dict[str, Any]:
     status: dict[str, Any] = {
         "battery": await macos.probe(_battery()),
         "volume_percent": await macos.probe(_volume()),
+        "muted": await macos.probe(_muted()),
+        "dark_mode": await macos.probe(_dark_mode()),
+        "muted": await macos.probe(_muted()),
+        "dark_mode": await macos.probe(_dark_mode()),
         "wifi_network": ssid,
         "disk": _disk(),
         "uptime": await macos.probe(_uptime()),
