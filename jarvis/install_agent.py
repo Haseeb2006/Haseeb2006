@@ -17,6 +17,7 @@ import plistlib
 import shutil
 import subprocess
 import sys
+import time
 from pathlib import Path
 
 LABEL = "com.haseeb.jarvis"
@@ -116,21 +117,84 @@ def install() -> int:
         plistlib.dump(plist_contents(uv_path), handle)
     print(f"Wrote {PLIST}")
 
-    # bootout first so a re-install replaces the running agent rather than
-    # failing with "service already loaded".
-    _launchctl("bootout", f"{domain()}/{LABEL}")
-    result = _launchctl("bootstrap", domain(), str(PLIST))
-    if result.returncode != 0:
-        print(f"launchctl bootstrap failed: {result.stderr.strip()}")
-        return 1
-    _launchctl("kickstart", f"{domain()}/{LABEL}")
-
+    started, how = start_agent()
     link_commands()
 
-    print("\nStarted. Check it with:")
+    if not started:
+        print(f"\nCould not get launchd to start it.\n{how}")
+        print("\nThe daemon itself is fine — run it in a terminal meanwhile:")
+        print("  uv run jarvisd")
+        return 1
+
+    print(f"\nStarted{how}. Check it with:")
     print("  uv run python install_agent.py --status")
     print("  uv run jarvis-ask battery")
     return 0
+
+
+def wait_for_socket(seconds: float = 8.0) -> bool:
+    """Whether the daemon actually came up.
+
+    launchctl reporting success is not the same as a working daemon, and its
+    errors are vague enough that the socket is the more honest signal.
+    """
+    from core import protocol
+
+    deadline = time.monotonic() + seconds
+    while time.monotonic() < deadline:
+        if protocol.socket_path().exists():
+            return True
+        time.sleep(0.25)
+    return False
+
+
+def diagnose() -> str:
+    """Explain a bootstrap failure with what launchd will actually tell us."""
+    lines = []
+    lint = subprocess.run(["plutil", "-lint", str(PLIST)], capture_output=True, text=True)
+    if lint.returncode != 0:
+        lines.append(f"  the plist is malformed: {lint.stdout.strip()}")
+
+    printed = _launchctl("print", f"{domain()}/{LABEL}")
+    if printed.returncode == 0:
+        lines.append("  a service with this label is already registered")
+
+    disabled = _launchctl("print-disabled", domain())
+    if f'"{LABEL}" => disabled' in disabled.stdout or f'"{LABEL}" => true' in disabled.stdout:
+        lines.append(f"  the service is disabled: launchctl enable {domain()}/{LABEL}")
+
+    log = LOG_DIR / "daemon.err"
+    if log.exists() and log.stat().st_size:
+        tail = "\n    ".join(log.read_text(errors="replace").splitlines()[-5:])
+        lines.append(f"  last lines of {log.name}:\n    {tail}")
+
+    return "\n".join(lines) or "  launchctl gave no further detail."
+
+
+def start_agent() -> tuple[bool, str]:
+    """Load and start the agent, working around launchd's vaguer refusals."""
+    service = f"{domain()}/{LABEL}"
+
+    # Replace any existing registration rather than colliding with it.
+    _launchctl("bootout", service)
+    # A label that was ever disabled makes bootstrap fail with a bare
+    # "Input/output error", which says nothing about the real cause.
+    _launchctl("enable", service)
+
+    result = _launchctl("bootstrap", domain(), str(PLIST))
+    if result.returncode == 0:
+        _launchctl("kickstart", service)
+        if wait_for_socket():
+            return True, ""
+        return False, diagnose()
+
+    # The legacy loader is more forgiving and still works.
+    legacy = _launchctl("load", "-w", str(PLIST))
+    if legacy.returncode == 0 and wait_for_socket():
+        return True, " (via launchctl load)"
+
+    detail = result.stderr.strip() or legacy.stderr.strip()
+    return False, f"  bootstrap said: {detail}\n{diagnose()}"
 
 
 def uninstall() -> int:
