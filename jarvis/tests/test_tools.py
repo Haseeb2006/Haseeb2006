@@ -15,10 +15,58 @@ async def test_search_finds_files_in_root(sandbox):
 async def test_search_never_returns_paths_outside_roots(sandbox, monkeypatch):
     """Even if the search backend hands back an outside path, it is filtered."""
     leaked = sandbox["outside"] / "passwords.txt"
-    monkeypatch.setattr(files, "_walk", lambda *a, **k: [leaked])
+    monkeypatch.setattr(files, "_walk_root", lambda *a, **k: [leaked])
     monkeypatch.setattr(macos, "is_macos", lambda: False)
     result = await files.search_files(query="passwords")
     assert result["count"] == 0
+
+
+async def test_walk_fallback_when_spotlight_returns_nothing(sandbox, monkeypatch):
+    """Spotlight not indexing a folder must not read as "the file is not there".
+
+    Regression: /var/folders, external volumes, Spotlight Privacy entries, and
+    just-created files all return empty from mdfind.
+    """
+    (sandbox["root"] / "budget.xlsx").write_text("x")
+
+    async def spotlight_finds_nothing(query, root, limit):
+        return []
+
+    monkeypatch.setattr(macos, "is_macos", lambda: True)
+    monkeypatch.setattr(files, "_spotlight_root", spotlight_finds_nothing)
+
+    result = await files.search_files(query="budget")
+    assert result["count"] == 1
+    assert result["results"][0]["name"] == "budget.xlsx"
+
+
+async def test_walk_fallback_when_spotlight_is_missing(sandbox, monkeypatch):
+    (sandbox["root"] / "budget.xlsx").write_text("x")
+
+    async def no_mdfind(query, root, limit):
+        raise FileNotFoundError("mdfind not found on PATH")
+
+    monkeypatch.setattr(macos, "is_macos", lambda: True)
+    monkeypatch.setattr(files, "_spotlight_root", no_mdfind)
+
+    assert (await files.search_files(query="budget"))["count"] == 1
+
+
+async def test_walk_does_not_descend_into_dot_directories(sandbox):
+    hidden = sandbox["root"] / ".venv" / "lib"
+    hidden.mkdir(parents=True)
+    (hidden / "target.txt").write_text("x")
+    (sandbox["root"] / "target.txt").write_text("x")
+
+    result = await files.search_files(query="target")
+    assert result["count"] == 1
+    assert ".venv" not in result["results"][0]["path"]
+
+
+async def test_search_finds_directories_too(sandbox):
+    (sandbox["root"] / "Reports").mkdir()
+    result = await files.search_files(query="Reports")
+    assert result["count"] == 1
 
 
 async def test_search_skips_dotfiles(sandbox):

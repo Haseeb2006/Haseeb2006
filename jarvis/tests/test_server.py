@@ -85,7 +85,7 @@ async def test_unexpected_crashes_stay_masked(sandbox, monkeypatch):
     def boom(*a, **k):
         raise KeyError("internal detail that must not escape")
 
-    monkeypatch.setattr(files, "_walk", boom)
+    monkeypatch.setattr(files, "_walk_root", boom)
     monkeypatch.setattr(macos, "is_macos", lambda: False)
 
     with pytest.raises(UnexpectedToolError) as exc:
