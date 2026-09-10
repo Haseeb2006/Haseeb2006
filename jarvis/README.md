@@ -68,12 +68,22 @@ ANTHROPIC_API_KEY=sk-ant-...
 JARVIS_ALLOWED_ROOTS=/Users/YOU/Documents,/Users/YOU/Desktop
 ```
 
-Then from anywhere:
+Installing also links `jarvis-ask`, `jarvis-prompt` and `jarvis` into
+`~/.local/bin`, since the console scripts otherwise live in this project's
+`.venv` and are on nobody's PATH:
 
 ```bash
 jarvis-ask battery          # ~100ms, most of it Python starting up
 jarvis-ask volume 40
 ```
+
+If that says `command not found`, `~/.local/bin` is not on your PATH:
+
+```bash
+echo 'export PATH="$HOME/.local/bin:$PATH"' >> ~/.zshrc && exec $SHELL
+```
+
+`uv run jarvis-ask …` from this directory always works regardless.
 
 ### A key that summons it
 
