@@ -27,6 +27,42 @@ HELP = """  /tools    list the tools Jarvis can use
   /reset    forget this conversation
   /quit     exit"""
 
+# People type `quit`, not `/quit`. Sending that to the API costs a request and
+# returns a puzzled answer, so treat the bare words as the command too.
+LEAVE = {"/quit", "/exit", "quit", "exit", "bye", "q"}
+
+
+def api_message(exc: anthropic.APIStatusError) -> str:
+    """The human sentence out of an API error, without the JSON wrapper."""
+    body = getattr(exc, "body", None)
+    if isinstance(body, dict):
+        error = body.get("error")
+        if isinstance(error, dict) and error.get("message"):
+            return str(error["message"])
+    return getattr(exc, "message", None) or str(exc)
+
+
+def fatal_hint(exc: anthropic.APIStatusError, message: str) -> str | None:
+    """What to do about an error that will not fix itself.
+
+    Billing and auth failures repeat identically on every turn. Staying in the
+    loop just reprints the same wall of JSON per keystroke, so these end the
+    session with the one thing that actually helps.
+    """
+    lowered = message.lower()
+    if "credit balance" in lowered or "billing" in lowered:
+        return (
+            "Add credits at console.anthropic.com > Plans & Billing.\n"
+            "  Nothing is wrong with jarvis — the account just cannot be charged."
+        )
+    if isinstance(exc, anthropic.AuthenticationError) or "x-api-key" in lowered:
+        return (
+            "Check ANTHROPIC_API_KEY. Keys are at console.anthropic.com > API keys."
+        )
+    if isinstance(exc, anthropic.PermissionDeniedError):
+        return f"This key may not have access to {settings.MODEL}."
+    return None
+
 
 async def converse() -> int:
     if not settings.has_api_key():
@@ -49,7 +85,7 @@ async def converse() -> int:
 
             if not text:
                 continue
-            if text in ("/quit", "/exit"):
+            if text.lower() in LEAVE:
                 return 0
             if text == "/help":
                 print(HELP)
@@ -64,8 +100,16 @@ async def converse() -> int:
 
             try:
                 reply = await jarvis.ask(text)
+            except anthropic.RateLimitError:
+                print(f"{YELLOW}  rate limited — wait a moment and try again{OFF}")
+                continue
             except anthropic.APIStatusError as exc:
-                print(f"{YELLOW}  api error {exc.status_code}: {exc.message}{OFF}")
+                message = api_message(exc)
+                print(f"{YELLOW}  {message}{OFF}")
+                hint = fatal_hint(exc, message)
+                if hint:
+                    print(f"{DIM}  {hint}{OFF}")
+                    return 1
                 continue
             except anthropic.APIConnectionError as exc:
                 print(f"{YELLOW}  cannot reach the API: {exc}{OFF}")
