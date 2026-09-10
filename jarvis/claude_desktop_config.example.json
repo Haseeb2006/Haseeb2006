@@ -1,0 +1,27 @@
+{
+  "_comment": [
+    "Merge the 'jarvis' block below into:",
+    "  ~/Library/Application Support/Claude/claude_desktop_config.json",
+    "",
+    "Two things bite people here:",
+    "  1. Claude Desktop does NOT inherit your shell PATH, so 'command' must be an",
+    "     ABSOLUTE path to uv. Find it with:  which uv",
+    "     Typically /Users/YOU/.local/bin/uv or /opt/homebrew/bin/uv",
+    "  2. --directory must be the absolute path to this jarvis folder.",
+    "",
+    "Then quit Claude Desktop completely (Cmd-Q, not just close) and reopen it.",
+    "macOS will prompt for Automation/Files permissions the first time a tool runs;",
+    "those grants attach to Claude Desktop, and you will re-grant them if you later",
+    "run the same server from a terminal or a launchd agent."
+  ],
+  "mcpServers": {
+    "jarvis": {
+      "command": "/Users/YOU/.local/bin/uv",
+      "args": ["--directory", "/ABSOLUTE/PATH/TO/jarvis", "run", "jarvis-mcp"],
+      "env": {
+        "JARVIS_ALLOWED_ROOTS": "/Users/YOU/Documents,/Users/YOU/Desktop,/Users/YOU/Projects",
+        "JARVIS_ALLOWED_SHORTCUTS": ""
+      }
+    }
+  }
+}
