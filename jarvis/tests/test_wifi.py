@@ -6,6 +6,7 @@ parsing is pinned here against real captures.
 
 from mcp_server.tools.system import (
     LOCATION_HINT,
+    parse_link_active,
     parse_ssid,
     parse_ssid_from_summary,
     parse_wifi_device,
@@ -53,28 +54,28 @@ def test_handles_empty_output():
 
 
 def test_reads_a_connected_network():
-    ssid, reason = parse_ssid("Current Wi-Fi Network: Haseeb 5GHz\n")
-    assert ssid == "Haseeb 5GHz"
-    assert reason is None
+    assert parse_ssid("Current Wi-Fi Network: Haseeb 5GHz\n") == "Haseeb 5GHz"
 
 
 def test_network_name_containing_a_colon_survives():
-    ssid, _ = parse_ssid("Current Wi-Fi Network: Cafe: Free WiFi\n")
-    assert ssid == "Cafe: Free WiFi"
+    assert parse_ssid("Current Wi-Fi Network: Cafe: Free WiFi\n") == "Cafe: Free WiFi"
 
 
-def test_reports_not_connected_rather_than_a_bare_null():
-    ssid, reason = parse_ssid(
-        "You are not associated with an AirPort network.\n"
-    )
-    assert ssid is None
-    assert "Not connected" in reason
+def test_not_associated_is_not_read_as_a_verdict():
+    """macOS 14+ says this to a process lacking Location Services, connected or not."""
+    assert parse_ssid("You are not associated with an AirPort network.\n") is None
 
 
-def test_blank_network_name_reads_as_a_permissions_problem():
-    ssid, reason = parse_ssid("Current Wi-Fi Network: \n")
-    assert ssid is None
-    assert reason == LOCATION_HINT
+def test_blank_network_name_names_nothing():
+    assert parse_ssid("Current Wi-Fi Network: \n") is None
+
+
+def test_link_status_is_read_from_ifconfig():
+    active = "en0: flags=8863<UP,BROADCAST,SMART,RUNNING>\n\tmedia: autoselect\n\tstatus: active\n"
+    inactive = "en0: flags=8863<UP,BROADCAST,SMART>\n\tmedia: autoselect (<unknown type>)\n\tstatus: inactive\n"
+    assert parse_link_active(active) is True
+    assert parse_link_active(inactive) is False
+    assert parse_link_active("") is False
 
 
 def test_ipconfig_summary_fallback():
@@ -134,7 +135,12 @@ async def test_interface_overrules_a_wrong_not_associated_verdict(monkeypatch):
     assert await system._wifi() == ("Haseeb 5GHz", None)
 
 
-async def test_not_connected_stands_when_both_sources_agree(monkeypatch):
+async def test_connected_but_nameless_blames_permissions_not_the_network(monkeypatch):
+    """The regression: connected over Wi-Fi, reported as "not connected".
+
+    Every name source stays silent without Location Services, so only the link
+    status can say whether we are actually online. It is active here.
+    """
     monkeypatch.setattr(
         macos,
         "run",
@@ -145,6 +151,28 @@ async def test_not_connected_stands_when_both_sources_agree(monkeypatch):
                     "You are not associated with an AirPort network.\n"
                 ),
                 ("ipconfig", "getsummary"): "<dictionary> {\n  Router : 10.0.0.1\n}",
+                ("ifconfig", "en0"): "en0: flags=8863\n\tstatus: active\n",
+            }
+        ),
+    )
+    ssid, reason = await system._wifi()
+    assert ssid is None
+    assert reason == LOCATION_HINT
+    assert "Not connected" not in reason
+
+
+async def test_not_connected_only_when_the_link_is_down(monkeypatch):
+    monkeypatch.setattr(
+        macos,
+        "run",
+        _fake_run(
+            {
+                ("networksetup", "-listallhardwareports"): PORTS,
+                ("networksetup", "-getairportnetwork"): (
+                    "You are not associated with an AirPort network.\n"
+                ),
+                ("ipconfig", "getsummary"): "<dictionary> {\n}",
+                ("ifconfig", "en0"): "en0: flags=8863\n\tstatus: inactive\n",
             }
         ),
     )

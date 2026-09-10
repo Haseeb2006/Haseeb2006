@@ -27,9 +27,9 @@ async def _volume() -> int | None:
 
 
 LOCATION_HINT = (
-    "Wi-Fi network name is hidden: since macOS 14, reading the SSID requires "
-    "Location Services permission for the app running this server. Grant it in "
-    "System Settings > Privacy & Security > Location Services."
+    "Connected to Wi-Fi, but the network name is hidden: since macOS 14 reading "
+    "the SSID requires Location Services permission for the app running this "
+    "server. Grant it in System Settings > Privacy & Security > Location Services."
 )
 
 
@@ -52,18 +52,31 @@ def parse_wifi_device(hardware_ports: str) -> str | None:
     return None
 
 
-def parse_ssid(airport_output: str) -> tuple[str | None, str | None]:
-    """Read `networksetup -getairportnetwork` output as (ssid, reason_it_is_absent)."""
+def parse_ssid(airport_output: str) -> str | None:
+    """The SSID named by `networksetup -getairportnetwork`, if it named one.
+
+    A None here is NOT evidence of being offline. On macOS 14+ this command
+    answers "You are not associated with an AirPort network." to any process
+    without Location Services permission, whether or not Wi-Fi is connected — so
+    it cannot tell "offline" apart from "not allowed to tell you". Whether the
+    link is actually up is decided by `parse_link_active` instead.
+    """
     text = airport_output.strip()
     # No trailing space in the marker: an empty SSID prints as "…Network: " and
     # stripping the output would otherwise stop the marker from matching at all.
     marker = "Current Wi-Fi Network:"
     if marker in text:
-        ssid = text.split(marker, 1)[1].strip()
-        return (ssid, None) if ssid else (None, LOCATION_HINT)
-    if "not associated" in text.lower():
-        return None, "Not connected to a Wi-Fi network."
-    return None, None
+        return text.split(marker, 1)[1].strip() or None
+    return None
+
+
+def parse_link_active(ifconfig_output: str) -> bool:
+    """Whether the interface is actually associated, per `ifconfig <device>`.
+
+    This is the one signal here that no permission gates: the link is up or it
+    is not, regardless of whether we are allowed to know the network's name.
+    """
+    return "status: active" in ifconfig_output
 
 
 def parse_ssid_from_summary(summary: str) -> str | None:
@@ -86,19 +99,23 @@ async def _wifi() -> tuple[str | None, str | None]:
         return None, "No Wi-Fi interface found on this Mac."
 
     result = await macos.run("networksetup", "-getairportnetwork", device)
-    ssid, reason = parse_ssid(result.stdout)
+    ssid = parse_ssid(result.stdout)
     if ssid:
         return ssid, None
 
-    # networksetup did not name a network. Ask the interface itself before
-    # concluding anything — it is the ground truth, and networksetup reports
-    # "not associated" in cases where the interface does hold an SSID. Reporting
-    # "not connected" when you are connected is worse than reporting nothing.
+    # Second source for the name, which sometimes answers when networksetup will not.
     summary = await macos.run("ipconfig", "getsummary", device)
     ssid = parse_ssid_from_summary(summary.stdout)
     if ssid:
         return ssid, None
-    return None, reason or LOCATION_HINT
+
+    # Neither would name the network. That is not the same as being offline, so
+    # ask the link itself — the only signal here that no permission gates — and
+    # report the reason it stayed nameless rather than inventing a verdict.
+    link = await macos.run("ifconfig", device)
+    if parse_link_active(link.stdout):
+        return None, LOCATION_HINT
+    return None, "Not connected to a Wi-Fi network."
 
 
 async def _frontmost_app() -> str | None:
