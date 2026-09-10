@@ -20,9 +20,20 @@ uv run jarvis-mcp                       # raw stdio server
 
 ## Wire into Claude Desktop
 
-Copy the block from `claude_desktop_config.example.json` into
-`~/Library/Application Support/Claude/claude_desktop_config.json`, replacing
-`/ABSOLUTE/PATH/TO/jarvis` with this directory's real path. Restart Claude Desktop.
+```bash
+uv run python doctor.py --fix    # writes the config, backing up any existing one
+```
+
+Then quit Claude Desktop with **Cmd-Q** — closing the window does not reload the
+config — and reopen it. `Settings > Developer` should list `jarvis` as running.
+
+`doctor.py` with no arguments checks without changing anything: that the config
+parses, names a `uv` that exists, points at this checkout, and — the part nothing
+else verifies — that the exact command Claude Desktop will run really does start a
+server that answers with all five tools.
+
+Local MCP servers work in the Claude **desktop app** only. claude.ai in a browser
+cannot reach a server on your machine.
 
 ## Tools
 
