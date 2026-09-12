@@ -11,8 +11,13 @@ from array import array
 
 import httpx2 as httpx
 
-HOST = os.environ.get("OLLAMA_HOST", "http://localhost:11434").rstrip("/")
-MODEL = os.environ.get("JARVIS_EMBED_MODEL", "nomic-embed-text")
+def host() -> str:
+    return os.environ.get("OLLAMA_HOST", "http://localhost:11434").rstrip("/")
+
+
+def model() -> str:
+    return os.environ.get("JARVIS_EMBED_MODEL", "nomic-embed-text")
+
 
 
 def pack(vector: list[float]) -> bytes:
@@ -44,12 +49,12 @@ async def embed(text: str) -> bytes | None:
     try:
         async with httpx.AsyncClient(timeout=20.0) as client:
             response = await client.post(
-                f"{HOST}/api/embed", json={"model": MODEL, "input": text}
+                f"{host()}/api/embed", json={"model": model(), "input": text}
             )
             if response.status_code == 404:
                 # Older Ollama exposes /api/embeddings with a different shape.
                 response = await client.post(
-                    f"{HOST}/api/embeddings", json={"model": MODEL, "prompt": text}
+                    f"{host()}/api/embeddings", json={"model": model(), "prompt": text}
                 )
                 response.raise_for_status()
                 return pack(response.json()["embedding"])

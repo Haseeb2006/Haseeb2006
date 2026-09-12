@@ -75,15 +75,15 @@ class Jarvis:
 
     def _request(self) -> dict[str, Any]:
         request: dict[str, Any] = {
-            "model": settings.MODEL,
-            "max_tokens": settings.MAX_TOKENS,
-            "max_iterations": settings.MAX_ITERATIONS,
+            "model": settings.model(),
+            "max_tokens": settings.max_tokens(),
+            "max_iterations": settings.max_iterations(),
             "system": build_system(),
             "tools": self._machine.claude_tools,
             # Adaptive thinking, with effort as the cost dial. `budget_tokens` is
             # rejected outright on this model family.
             "thinking": {"type": "adaptive"},
-            "output_config": {"effort": settings.EFFORT},
+            "output_config": {"effort": settings.effort()},
         }
         if self._fallbacks_supported:
             # Opus 5 can decline a request outright; let the server re-route it

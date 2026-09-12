@@ -164,10 +164,10 @@ async def test_request_uses_adaptive_thinking_and_effort():
     call = client.beta.messages.calls[0]
 
     assert call["thinking"] == {"type": "adaptive"}
-    assert call["output_config"] == {"effort": settings.EFFORT}
+    assert call["output_config"] == {"effort": settings.effort()}
     # budget_tokens is rejected outright on this model family.
     assert "budget_tokens" not in str(call)
-    assert call["model"] == settings.MODEL
+    assert call["model"] == settings.model()
 
 
 # --- failure handling ---

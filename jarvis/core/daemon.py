@@ -22,7 +22,8 @@ from .dispatch import Dispatcher
 from .local import LocalModel
 from .machine import Machine
 
-IDLE_RESET_SECONDS = int(os.environ.get("JARVIS_IDLE_RESET", "1800"))
+def idle_reset_seconds() -> int:
+    return int(os.environ.get("JARVIS_IDLE_RESET", "1800"))
 
 
 class Daemon:
@@ -40,7 +41,7 @@ class Daemon:
             if (
                 self._jarvis is not None
                 and self._last_seen
-                and now - self._last_seen > IDLE_RESET_SECONDS
+                and now - self._last_seen > idle_reset_seconds()
             ):
                 self._jarvis.messages.clear()
             self._last_seen = now
@@ -120,7 +121,7 @@ async def run() -> int:
         print(f"  tools:  {len(machine.tool_names)}", flush=True)
         print(f"  local:  {local.model if usable else 'off — ' + reason}", flush=True)
         print(
-            f"  claude: {settings.MODEL if jarvis else 'off — no ANTHROPIC_API_KEY'}",
+            f"  claude: {settings.model() if jarvis else 'off — no ANTHROPIC_API_KEY'}",
             flush=True,
         )
 

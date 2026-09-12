@@ -68,7 +68,7 @@ def fatal_hint(exc: anthropic.APIStatusError, message: str) -> str | None:
             "Check ANTHROPIC_API_KEY. Keys are at console.anthropic.com > API keys."
         )
     if isinstance(exc, anthropic.PermissionDeniedError):
-        return f"This key may not have access to {settings.MODEL}."
+        return f"This key may not have access to {settings.model()}."
     return None
 
 
@@ -93,7 +93,7 @@ async def converse() -> int:
 
         tiers = ["direct rules", local_note if local else local_note]
         tiers.append(
-            f"{settings.MODEL} (effort {settings.EFFORT})" if has_key
+            f"{settings.model()} (effort {settings.effort()})" if has_key
             else f"{DIM}claude off (no ANTHROPIC_API_KEY){OFF}"
         )
         print(f"{DIM}{len(machine.tool_names)} tools{OFF} · " + f"{DIM} · {OFF}".join(tiers))

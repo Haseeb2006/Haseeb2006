@@ -11,8 +11,13 @@ import os
 
 import httpx2 as httpx
 
-HOST = os.environ.get("OLLAMA_HOST", "http://localhost:11434").rstrip("/")
-MODEL = os.environ.get("JARVIS_LOCAL_MODEL", "qwen3:4b")
+def default_host() -> str:
+    return os.environ.get("OLLAMA_HOST", "http://localhost:11434").rstrip("/")
+
+
+def default_model() -> str:
+    return os.environ.get("JARVIS_LOCAL_MODEL", "qwen3:4b")
+
 ESCALATE = "ESCALATE"
 
 SYSTEM = f"""You are the local half of an assistant running on a Mac.
@@ -28,9 +33,10 @@ Never guess about the user's machine. Answer in one or two sentences."""
 
 
 class LocalModel:
-    def __init__(self, model: str = MODEL, host: str = HOST) -> None:
-        self.model = model
-        self.host = host
+    def __init__(self, model: str | None = None, host: str | None = None) -> None:
+        # Resolved now rather than at import, so ~/.jarvis/env is honoured.
+        self.model = model or default_model()
+        self.host = host or default_host()
 
     async def installed_models(self) -> list[str]:
         """Model names Ollama has pulled, or [] if Ollama is not reachable."""
